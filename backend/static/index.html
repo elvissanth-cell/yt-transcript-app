@@ -1835,24 +1835,26 @@ function renderFavoritesBar() {
   const favorites = loadFavorites();
   if (!favorites.length) { els.favoritesBar.style.display = 'none'; return; }
   els.favoritesBar.style.display = 'flex';
-  els.favoritesBar.innerHTML = favorites.map(f => `
-    <div class="fav-pill" data-fid="${f.id}">
-      <span class="fav-name">⭐ ${escapeHtml(f.name)}</span>
+  els.favoritesBar.innerHTML = favorites.map((f, idx) => `
+    <div class="fav-pill" data-idx="${idx}">
+      <span class="fav-name">⭐ ${escapeHtml(f.name || '(未命名)')}</span>
       <span class="fav-del" title="刪除">✕</span>
     </div>`).join('');
 
   els.favoritesBar.querySelectorAll('.fav-pill').forEach(pill => {
-    const fid = pill.dataset.fid;
+    const idx = Number(pill.dataset.idx);
     pill.querySelector('.fav-name').addEventListener('click', () => {
-      const fav = loadFavorites().find(f => f.id === fid);
-      if (!fav) return;
+      const fav = loadFavorites()[idx];
+      if (!fav || !fav.channelIds) return;
       selectedChannelIds = new Set(fav.channelIds);
       renderCategoryGroups();
       loadSubsFeed([...selectedChannelIds]);
     });
     pill.querySelector('.fav-del').addEventListener('click', (e) => {
       e.stopPropagation();
-      saveFavorites(loadFavorites().filter(f => f.id !== fid));
+      const list = loadFavorites();
+      list.splice(idx, 1);
+      saveFavorites(list);
       renderFavoritesBar();
     });
   });
