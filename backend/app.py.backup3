@@ -370,22 +370,6 @@ FAVORITES_FILE = os.path.join(os.path.dirname(__file__), "favorites.json")
 YT_READONLY_SCOPES = ["https://www.googleapis.com/auth/youtube"]  # 含讀寫,支援訂閱/取消訂閱(原本只有.readonly)
 
 
-@app.route("/api/debug-secret", methods=["GET"])
-def _debug_secret():
-    """暫時性的排查端點:檢查兩個候選路徑上到底存不存在client_secret.json,
-    確認後這個路由可以整個刪掉,不影響其他功能。"""
-    render_path = "/etc/secrets/client_secret.json"
-    local_path = os.path.join(os.path.dirname(__file__), "client_secret.json")
-    return jsonify({
-        "render_secret_path": render_path,
-        "render_secret_exists": os.path.exists(render_path),
-        "local_path": local_path,
-        "local_exists": os.path.exists(local_path),
-        "resolved_CLIENT_SECRETS_FILE": CLIENT_SECRETS_FILE,
-        "etc_secrets_dir_listing": os.listdir("/etc/secrets") if os.path.isdir("/etc/secrets") else "目錄不存在",
-    })
-
-
 def _load_json_file(path, default):
     if not os.path.exists(path):
         return default
