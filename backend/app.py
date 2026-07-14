@@ -352,7 +352,18 @@ def get_channel_playlists():
         return jsonify({"error": f"播放清單擷取失敗: {str(e)}"}), 500
 
 
-CLIENT_SECRETS_FILE = os.path.join(os.path.dirname(__file__), "client_secret.json")
+def _resolve_secret_path(filename: str) -> str:
+    """Render的Secret Files功能會把檔案放在/etc/secrets/<filename>,
+    本機開發時則是放在backend資料夾內跟app.py同一層,這裡依序檢查,
+    找不到的話仍回傳本機路徑(讓錯誤訊息維持原本'請先完成OAuth憑證申請'的提示)。"""
+    render_secret_path = os.path.join("/etc/secrets", filename)
+    local_path = os.path.join(os.path.dirname(__file__), filename)
+    if os.path.exists(render_secret_path):
+        return render_secret_path
+    return local_path
+
+
+CLIENT_SECRETS_FILE = _resolve_secret_path("client_secret.json")
 TOKEN_FILE = os.path.join(os.path.dirname(__file__), "token.json")
 CATEGORIES_FILE = os.path.join(os.path.dirname(__file__), "categories.json")
 FAVORITES_FILE = os.path.join(os.path.dirname(__file__), "favorites.json")
