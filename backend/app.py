@@ -707,12 +707,15 @@ def api_playlist_items():
                 res_id = sn.get("resourceId", {})
                 if res_id.get("kind") != "youtube#video":
                     continue
+                ch_id = sn.get("videoOwnerChannelId")
                 items.append(
                     {
                         "playlist_item_id": item["id"],
                         "video_id": res_id.get("videoId"),
                         "title": sn.get("title"),
                         "channel": sn.get("videoOwnerChannelTitle"),  # 影片實際所屬頻道(不是播放清單擁有者)
+                        "channel_id": ch_id,
+                        "channel_url": f"https://www.youtube.com/channel/{ch_id}" if ch_id else None,
                         "position": sn.get("position"),
                     }
                 )

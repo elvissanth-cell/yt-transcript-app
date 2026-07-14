@@ -6,6 +6,11 @@
 <title>逐字稿站 · YouTube 研究工具</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0F1115">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="逐字稿站">
 <style>
   :root{
     --bg:#0F1115;
@@ -385,7 +390,35 @@
   .playlist-items-list .pl-item:hover{color:var(--accent);}
   .playlist-items-list .pl-item input{margin-top:3px;flex-shrink:0;cursor:pointer;}
   .playlist-items-list .pl-item .pl-item-title{flex:1;line-height:1.5;}
-  .playlist-items-list .pl-item-channel{color:var(--muted);font-size:11.5px;}
+  .playlist-items-list .pl-item-channel{color:var(--muted);font-size:11.5px;cursor:pointer;}
+  .playlist-items-list .pl-item-channel:hover{color:var(--accent);text-decoration:underline;}
+
+  /* ---- 影片資訊列(播放器與逐字稿之間):頻道名/訂閱按鈕/加入播放清單 ---- */
+  .video-info-bar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 12px;margin:10px 0;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  }
+  .video-info-bar .vib-title{flex:1 1 100%;font-size:13.5px;font-weight:600;line-height:1.4;}
+  .video-info-bar .vib-channel{
+    color:var(--muted);font-size:12.5px;cursor:pointer;
+  }
+  .video-info-bar .vib-channel:hover{color:var(--accent);text-decoration:underline;}
+  .video-info-bar .vib-actions{display:flex;gap:8px;margin-left:auto;position:relative;}
+  .video-info-bar .vib-sub-btn{font-size:12px;padding:0 12px;height:28px;}
+  .video-info-bar .vib-sub-btn.subscribed{color:var(--muted);}
+  .video-info-bar .vib-addpl-btn{font-size:12px;padding:0 12px;height:28px;}
+  .video-info-bar .vib-pl-menu{
+    position:absolute;top:32px;right:0;z-index:20;min-width:180px;max-height:240px;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.4);padding:6px;display:none;
+  }
+  .video-info-bar .vib-pl-menu.open{display:block;}
+  .video-info-bar .vib-pl-menu button{
+    display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);
+    padding:7px 8px;font-size:12.5px;border-radius:6px;cursor:pointer;
+  }
+  .video-info-bar .vib-pl-menu button:hover{background:var(--line);}
   .pl-browse-item{
     padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;
     border:1px solid var(--line);margin-bottom:8px;background:var(--surface);
@@ -594,6 +627,8 @@
       <span id="rateIndicator" style="display:none;margin-left:8px;color:var(--accent);font-weight:600;"></span>
     </div>
 
+    <div class="video-info-bar" id="videoInfoBar" style="display:none"></div>
+
     <div class="panel" id="transcriptPanel" style="display:none">
       <div class="panel-head">
         <span class="dot"></span>
@@ -675,6 +710,7 @@ const els = {
   subsNavBtn: document.getElementById('subsNavBtn'),
   playlistsNavBtn: document.getElementById('playlistsNavBtn'),
   nowPlaying: document.getElementById('nowPlaying'),
+  videoInfoBar: document.getElementById('videoInfoBar'),
   transcriptPanel: document.getElementById('transcriptPanel'),
   transcriptBody: document.getElementById('transcriptBody'),
   commentsPanel: document.getElementById('commentsPanel'),
@@ -689,12 +725,15 @@ let lastCommentsText = "";
 let lastSearchQuery = "";          // 供頻道頁「返回搜尋」使用
 let currentChannel = null;         // {url, name, sort, q} 記住目前頻道頁狀態,供排序/搜尋切換使用
 let channelSelection = new Map();  // 頻道頁內目前勾選的影片: video_id -> video物件
+let isUserLoggedIn = false;        // 是否已登入Google帳號(影響影片資訊列要不要顯示訂閱按鈕)
+let myPlaylistsCache = null;       // 快取「加入播放清單」選單用的清單列表,避免每次開選單都重打API
 
 // ---------- Google 登入狀態 ----------
 async function checkAuthStatus() {
   try {
     const res = await fetch(`${API_BASE}/auth/status`);
     const data = await res.json();
+    isUserLoggedIn = !!data.logged_in;
     const display = data.logged_in ? 'inline-flex' : 'none';
     els.loginBtn.style.display = data.logged_in ? 'none' : 'inline-flex';
     els.logoutBtn.style.display = data.logged_in ? 'inline-flex' : 'none';
@@ -1733,6 +1772,8 @@ async function selectVideo(v, opts = {}) {
   playerWrap.style.display = 'block';
   playerWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
+  renderVideoInfoBar(v);
+
   els.transcriptPanel.style.display = 'block';
   els.commentsPanel.style.display = 'block';
   els.transcriptBody.innerHTML = '<div class="loading">逐字稿擷取中…</div>';
@@ -1775,6 +1816,150 @@ async function selectVideo(v, opts = {}) {
       },
     });
   }
+}
+
+// ---------- 影片資訊列(播放器與逐字稿之間):標題/頻道連結/訂閱/加入播放清單 ----------
+function renderVideoInfoBar(v) {
+  const bar = els.videoInfoBar;
+  if (!bar) return;
+  bar.style.display = 'flex';
+  const channelId = v.channel_id || '';
+  const channelUrl = v.channel_url || '';
+  bar.innerHTML = `
+    <div class="vib-title">${escapeHtml(v.title || '')}</div>
+    ${v.channel ? `<span class="vib-channel">${escapeHtml(v.channel)}</span>` : ''}
+    <div class="vib-actions">
+      ${channelId ? `<button class="btn vib-sub-btn" id="vibSubBtn">…</button>` : ''}
+      <button class="btn vib-addpl-btn" id="vibAddPlBtn">＋ 加入播放清單</button>
+      <div class="vib-pl-menu" id="vibPlMenu"></div>
+    </div>`;
+
+  const channelEl = bar.querySelector('.vib-channel');
+  if (channelEl && channelUrl) {
+    channelEl.addEventListener('click', () => loadChannel(channelUrl));
+  }
+
+  if (channelId) {
+    updateSubscribeButtonState(channelId);
+    document.getElementById('vibSubBtn').addEventListener('click', () => toggleSubscribe(channelId));
+  }
+
+  document.getElementById('vibAddPlBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openAddToPlaylistMenu(v.video_id);
+  });
+}
+document.addEventListener('click', closeAddToPlaylistMenuOnOutsideClick); // 只需綁定一次(非每次選片都綁),避免重複疊加
+
+async function updateSubscribeButtonState(channelId) {
+  const btn = document.getElementById('vibSubBtn');
+  if (!btn) return;
+  if (!isUserLoggedIn) {
+    btn.textContent = '訂閱(需登入)';
+    btn.disabled = true;
+    return;
+  }
+  if (!allSubscriptions.length) {
+    try {
+      const res = await fetch(`${API_BASE}/api/subscriptions`);
+      const data = await res.json();
+      if (data.subscriptions) allSubscriptions = data.subscriptions;
+    } catch (err) { /* 靜默失敗,按鈕維持預設「訂閱」文字即可 */ }
+  }
+  const sub = allSubscriptions.find(s => s.channel_id === channelId);
+  btn.textContent = sub ? '✓ 已訂閱' : '＋ 訂閱';
+  btn.classList.toggle('subscribed', !!sub);
+  btn.dataset.subscriptionId = sub ? sub.subscription_id : '';
+}
+
+async function toggleSubscribe(channelId) {
+  const btn = document.getElementById('vibSubBtn');
+  if (!btn || !isUserLoggedIn) return;
+  btn.disabled = true;
+  try {
+    if (btn.dataset.subscriptionId) {
+      await fetch(`${API_BASE}/api/unsubscribe`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription_id: btn.dataset.subscriptionId }),
+      });
+      allSubscriptions = allSubscriptions.filter(s => s.channel_id !== channelId);
+    } else {
+      const res = await fetch(`${API_BASE}/api/subscribe`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: channelId }),
+      });
+      const data = await res.json();
+      if (data.subscription_id) {
+        allSubscriptions.push({ channel_id: channelId, subscription_id: data.subscription_id });
+      }
+    }
+  } catch (err) {
+    alert('訂閱狀態切換失敗: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    updateSubscribeButtonState(channelId);
+  }
+}
+
+async function openAddToPlaylistMenu(videoId) {
+  const menu = document.getElementById('vibPlMenu');
+  if (!menu) return;
+  const isOpen = menu.classList.contains('open');
+  if (isOpen) { menu.classList.remove('open'); return; }
+
+  if (!isUserLoggedIn) {
+    menu.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12.5px;">需先登入Google帳號</div>';
+    menu.classList.add('open');
+    return;
+  }
+
+  menu.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12.5px;">載入清單中…</div>';
+  menu.classList.add('open');
+
+  if (!myPlaylistsCache) {
+    try {
+      const res = await fetch(`${API_BASE}/api/my_playlists`);
+      const data = await res.json();
+      myPlaylistsCache = data.playlists || [];
+    } catch (err) {
+      menu.innerHTML = `<div style="padding:8px;color:var(--muted);font-size:12.5px;">清單讀取失敗</div>`;
+      return;
+    }
+  }
+
+  if (!menu.classList.contains('open')) return; // 讀取期間使用者可能已經關掉選單
+  if (!myPlaylistsCache.length) {
+    menu.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12.5px;">你還沒有任何播放清單</div>';
+    return;
+  }
+  menu.innerHTML = myPlaylistsCache.map(pl =>
+    `<button data-plid="${escapeHtml(pl.playlist_id)}">${escapeHtml(pl.title)}</button>`
+  ).join('');
+  menu.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.textContent = '加入中…';
+      try {
+        const res = await fetch(`${API_BASE}/api/playlist_add_item`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playlist_id: btn.dataset.plid, video_id: videoId }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        btn.textContent = '✓ 已加入';
+        setTimeout(() => { menu.classList.remove('open'); }, 600);
+      } catch (err) {
+        btn.textContent = '失敗，再試一次';
+      }
+    });
+  });
+}
+
+function closeAddToPlaylistMenuOnOutsideClick(e) {
+  const menu = document.getElementById('vibPlMenu');
+  const btn = document.getElementById('vibAddPlBtn');
+  if (!menu || !menu.classList.contains('open')) return;
+  if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+  menu.classList.remove('open');
 }
 
 function updateRateIndicator() {
@@ -1991,7 +2176,7 @@ function renderPlaylistItemsList(items) {
     return;
   }
   list.innerHTML = items.map(it => `
-    <div class="pl-item" data-plitemid="${it.playlist_item_id}" data-vid="${it.video_id}" data-title="${escapeHtml(it.title)}" data-channel="${escapeHtml(it.channel || '')}">
+    <div class="pl-item" data-plitemid="${it.playlist_item_id}" data-vid="${it.video_id}" data-title="${escapeHtml(it.title)}" data-channel="${escapeHtml(it.channel || '')}" data-channel-url="${escapeHtml(it.channel_url || '')}" data-channel-id="${escapeHtml(it.channel_id || '')}">
       <input type="checkbox" class="vid-check" title="勾選">
       <span class="pl-item-title">${escapeHtml(it.title)}${it.channel ? ` <span class="pl-item-channel">· ${escapeHtml(it.channel)}</span>` : ''}</span>
     </div>`).join('');
@@ -2013,9 +2198,18 @@ function renderPlaylistItemsList(items) {
       }
       updatePlItemToolbar();
     });
-    row.querySelector('.pl-item-title').addEventListener('click', () => {
-      selectVideo({ video_id: row.dataset.vid, title: row.dataset.title, channel: row.dataset.channel });
-    });
+    const videoObj = {
+      video_id: row.dataset.vid,
+      title: row.dataset.title,
+      channel: row.dataset.channel,
+      channel_url: row.dataset.channelUrl,
+      channel_id: row.dataset.channelId,
+    };
+    row.querySelector('.pl-item-title').addEventListener('click', () => selectVideo(videoObj));
+    const channelSpan = row.querySelector('.pl-item-channel');
+    if (channelSpan && row.dataset.channelUrl) {
+      channelSpan.addEventListener('click', (e) => { e.stopPropagation(); loadChannel(row.dataset.channelUrl); });
+    }
   });
   updatePlItemToolbar();
 }
