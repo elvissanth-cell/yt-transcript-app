@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>逐字稿站 · YouTube 研究工具</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F1115">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="逐字稿站">
+<style>
+  :root{
+    --bg:#0F1115;
+    --surface:#171A21;
+    --surface-2:#1F232C;
+    --line:#2A2F3A;
+    --text:#E7E5E0;
+    --muted:#8B8F98;
+    --accent:#E8A33D;
+    --accent-dim:#8A6323;
+    --mint:#6EE7B7;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .slate{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:22px 28px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .slate .clap{
+    width:34px;height:34px;border-radius:6px;
+    background:repeating-linear-gradient(115deg, var(--accent), var(--accent) 6px, #0F1115 6px, #0F1115 12px);
+    border:2px solid var(--accent);
+    flex-shrink:0;
+  }
+  .slate h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:.3px;
+    margin:0;
+  }
+  .slate .tag{
+    color:var(--muted);
+    font-size:12px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    margin-left:auto;
+  }
+
+  .search-bar{
+    display:flex;
+    gap:10px;
+    padding:20px 28px;
+    max-width:900px;
+    margin:0 auto;
+  }
+  .search-bar input{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:13px 16px;
+    border-radius:var(--radius);
+    font-size:15px;
+    outline:none;
+  }
+  .search-bar input:focus{border-color:var(--accent);}
+  .btn{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:0 18px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    font-size:14px;
+    display:flex;align-items:center;gap:6px;
+    transition:border-color .15s;
+  }
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent);color:#191305;border-color:var(--accent);font-weight:600;}
+  .btn.mic.listening{border-color:#e05252;color:#e05252;animation:pulse 1s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.5;}100%{opacity:1;}}
+
+  .container{max-width:1000px;margin:0 auto;padding:0 28px 60px;}
+
+  .results{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:14px;
+    margin-top:6px;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    cursor:pointer;
+    transition:transform .12s, border-color .12s;
+    position:relative;
+  }
+  .card-select{
+    position:absolute;top:8px;left:8px;z-index:2;
+    width:22px;height:22px;border-radius:5px;
+    background:rgba(15,17,21,.75);display:flex;align-items:center;justify-content:center;
+  }
+  .card-select input{width:16px;height:16px;cursor:pointer;accent-color:var(--accent);}
+
+  .selection-bar{
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);
+    padding:10px 14px;margin:14px 0;font-size:12.5px;
+  }
+  .selection-bar span{color:var(--muted);margin-right:4px;}
+  .selection-bar .btn{font-size:12px;padding:0 12px;height:30px;}
+  .selection-bar select{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    padding:0 8px;height:30px;border-radius:8px;font-size:12px;
+  }
+  .card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .card img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;background:#000;}
+  .card .info{padding:10px 12px 14px;}
+  .card .title{font-size:13.5px;line-height:1.4;font-weight:600;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .card .channel{font-size:12px;color:var(--muted);margin-top:6px;}
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-top:22px;
+    overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;gap:10px;
+    padding:14px 18px;border-bottom:1px solid var(--line);
+    background:var(--surface-2);
+  }
+  .panel-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+  .panel-head h2{font-size:14px;margin:0;flex:1;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
+  .panel-body{max-height:420px;overflow-y:auto;padding:16px 18px;font-size:14px;line-height:1.75;}
+  .panel-body.collapsed{display:none;}
+  .seg{display:flex;gap:12px;margin-bottom:6px;}
+  .seg .ts{color:var(--accent);font-variant-numeric:tabular-nums;font-size:12px;flex-shrink:0;width:52px;}
+  .comment{padding:10px 0;border-bottom:1px solid var(--line);}
+  .comment:last-child{border-bottom:none;}
+  .comment .author{color:var(--mint);font-size:12.5px;font-weight:600;}
+  .comment .votes{color:var(--muted);font-size:11.5px;margin-left:8px;}
+  .comment .ctime{color:var(--muted);font-size:11.5px;margin-left:8px;}
+  .comment .ctext{margin-top:4px;}
+  .empty,.loading,.err{color:var(--muted);font-size:13.5px;padding:6px 0;}
+  .err{color:#e08888;}
+  .now-playing{font-size:13px;color:var(--muted);margin:20px 0 0;}
+  .now-playing b{color:var(--text);}
+  .player-wrap{margin-top:14px;border-radius:var(--radius);overflow:hidden;
+    border:1px solid var(--line);background:#000;aspect-ratio:16/9;}
+  .player-wrap iframe{width:100%;height:100%;display:block;}
+  .card .channel{cursor:pointer;}
+  .card .channel:hover{color:var(--accent);text-decoration:underline;}
+
+  /* ---- 頻道預覽卡(搜尋結果上方) ---- */
+  .channel-preview{
+    display:flex;gap:18px;align-items:flex-start;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;margin-bottom:22px;
+  }
+  .avatar{
+    width:64px;height:64px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent);color:#191305;font-weight:700;font-size:20px;
+  }
+  .avatar.lg{width:88px;height:88px;font-size:28px;border:3px solid var(--surface);
+    margin-top:-44px;background:var(--accent);}
+  .cp-info{flex:1;min-width:0;}
+  .cp-info .name{font-size:17px;font-weight:700;display:flex;align-items:center;gap:6px;}
+  .cp-info .meta{font-size:12.5px;color:var(--muted);margin-top:4px;}
+  .cp-info .desc{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .cp-actions{flex-shrink:0;}
+  .results-label{font-size:13px;color:var(--muted);text-transform:uppercase;
+    letter-spacing:1px;margin:4px 0 12px;}
+
+  /* ---- 獨立頻道頁面 ---- */
+  .channel-page{margin-bottom:24px;}
+  .cpage-banner{height:110px;border-radius:var(--radius) var(--radius) 0 0;
+    background:linear-gradient(120deg, var(--accent-dim), var(--surface-2));}
+  .cpage-head{
+    background:var(--surface);border:1px solid var(--line);border-top:none;
+    border-radius:0 0 var(--radius) var(--radius);padding:0 22px 18px;
+  }
+  .cpage-head .name{font-size:20px;font-weight:700;margin-top:10px;}
+  .cpage-head .meta{font-size:13px;color:var(--muted);margin-top:4px;}
+  .cpage-head .desc{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.7;max-width:640px;}
+  .cpage-tabs{display:flex;gap:22px;margin-top:16px;border-bottom:1px solid var(--line);}
+  .cpage-tabs span{font-size:13.5px;padding:8px 2px;color:var(--muted);}
+  .cpage-tabs span.active{color:var(--text);border-bottom:2px solid var(--accent);font-weight:600;}
+  .back-btn{margin-bottom:14px;}
+
+  /* ---- 頻道控制列(排序/搜尋/播放清單) ---- */
+  .cpage-controls{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+    margin:16px 0 14px;
+  }
+  .cpage-controls input{
+    flex:1;min-width:180px;background:var(--surface);border:1px solid var(--line);
+    color:var(--text);padding:9px 12px;border-radius:8px;font-size:13.5px;outline:none;
+  }
+  .sort-group{display:flex;gap:6px;}
+  .sort-btn.active{border-color:var(--accent);color:var(--accent);}
+  .scope-note{font-size:11.5px;color:var(--muted);margin:-6px 0 12px;}
+
+  .playlist-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;cursor:pointer;transition:border-color .12s;
+  }
+  .playlist-card:hover{border-color:var(--accent);}
+  .playlist-card img{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block;}
+  .playlist-card .pl-info{padding:10px 12px;}
+  .playlist-card .pl-title{font-size:13px;font-weight:600;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .playlist-card .pl-count{font-size:11.5px;color:var(--muted);margin-top:6px;}
+
+  .card .meta{font-size:11.5px;color:var(--muted);margin-top:4px;}
+
+  /* ---- 頂部登入/訂閱區 ---- */
+  .topbar-actions{display:flex;gap:8px;align-items:center;margin-left:16px;}
+  .topbar-actions .btn{padding:0 14px;height:34px;font-size:13px;}
+
+  /* ---- 訂閱頁面 ---- */
+  .subs-channels{
+    display:flex;flex-wrap:wrap;gap:10px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:20px;
+  }
+  .subs-channel-chip{
+    display:flex;align-items:center;gap:8px;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:20px;
+    padding:6px 12px 6px 6px;cursor:pointer;font-size:12.5px;user-select:none;
+  }
+  .subs-channel-chip.selected{border-color:var(--accent);}
+  .subs-channel-chip .avatar{width:22px;height:22px;font-size:10px;}
+  .subs-channel-chip img.avatar{object-fit:cover;}
+  .subs-apply-row{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;}
+
+  /* ---- 我的最愛篩選列 ---- */
+  .favorites-bar{
+    display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;
+  }
+  .fav-pill{
+    display:flex;align-items:center;gap:8px;
+    background:var(--accent-dim);border:1px solid var(--accent);color:var(--text);
+    border-radius:20px;padding:7px 8px 7px 14px;font-size:12.5px;cursor:pointer;
+  }
+  .fav-pill:hover{background:var(--accent);color:#191305;}
+  .fav-pill .fav-del{
+    width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.25);
+    display:flex;align-items:center;justify-content:center;font-size:11px;
+  }
+  .fav-pill .fav-del:hover{background:rgba(0,0,0,.5);}
+
+  .subs-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  .subs-toolbar h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:0;}
+
+  /* ---- 分類群組 ---- */
+  .category-group{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    margin-bottom:10px;overflow:hidden;
+  }
+  .category-header{
+    display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;
+    background:var(--surface-2);
+  }
+  .category-header:hover{background:#242832;}
+  .category-header .cat-check{
+    width:16px;height:16px;border-radius:4px;border:1.5px solid var(--muted);flex-shrink:0;
+  }
+  .category-header.all-selected .cat-check{background:var(--accent);border-color:var(--accent);}
+  .category-header.some-selected .cat-check{background:var(--accent-dim);border-color:var(--accent);}
+  .category-header .cat-name{font-weight:600;font-size:13.5px;flex:1;}
+  .category-header .cat-count{color:var(--muted);font-size:12px;}
+  .category-header .cat-arrow{color:var(--muted);font-size:11px;transition:transform .15s;}
+  .category-header .cat-arrow.open{transform:rotate(90deg);}
+  .category-body{
+    display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;
+    border-top:1px solid var(--line);
+  }
+  .category-body.collapsed{display:none;}
+
+  /* ---- 分類管理面板 ---- */
+  .category-manager{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:16px;
+  }
+  .cm-row{
+    display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);
+  }
+  .cm-row:last-child{border-bottom:none;}
+  .cm-row .cm-name{flex:1;font-size:13px;min-width:120px;}
+  .cm-tags{display:flex;flex-wrap:wrap;gap:6px;flex:2;}
+  .cm-tag{
+    font-size:11.5px;padding:4px 10px;border-radius:12px;
+    background:var(--surface-2);border:1px solid var(--line);cursor:pointer;
+  }
+  .cm-tag.active{background:var(--accent);border-color:var(--accent);color:#191305;}
+  .cm-add-cat{display:flex;gap:8px;margin-bottom:14px;}
+
+  /* ================= 三欄式版面 v2:左導覽窄欄 / 中結果清單 / 右播放器 ================= */
+  .app-shell{
+    display:grid;
+    grid-template-columns:260px minmax(0,1fr) 420px;
+    align-items:start;
+  }
+  body.channel-mode .app-shell{ grid-template-columns:1fr; }
+  body.channel-mode .sidebar,
+  body.channel-mode .player-sidebar{ display:none !important; }
+
+  .sidebar{
+    position:sticky;top:0;
+    height:100vh;overflow-y:auto;
+    border-right:1px solid var(--line);
+    padding:16px;
+    scrollbar-width:thin;
+  }
+  .sidebar-pinned{
+    position:sticky;top:0;background:var(--bg);z-index:5;
+    padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  .search-row{display:flex;gap:6px;margin-bottom:8px;}
+  .search-row input{
+    flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;border-radius:8px;font-size:13px;outline:none;min-width:0;
+  }
+  .search-row input:focus{border-color:var(--accent);}
+  .search-row .btn{padding:0 10px;font-size:12px;}
+
+  .filter-row{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+  .filter-row select{
+    flex:1;min-width:70px;background:var(--surface);border:1px solid var(--line);
+    color:var(--text);padding:7px 6px;border-radius:8px;font-size:11px;outline:none;
+  }
+
+  .sidebar-nav{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+  .nav-btn{
+    background:var(--surface);border:1px solid var(--line);color:var(--muted);
+    padding:9px 12px;border-radius:10px;font-size:12.5px;cursor:pointer;text-align:left;
+  }
+  .nav-btn.active{background:var(--accent);border-color:var(--accent);color:#191305;font-weight:600;}
+  .nav-btn.external{display:flex;justify-content:space-between;align-items:center;}
+
+  /* ---- 中間:結果清單區(取代舊的sidebar-view位置) ---- */
+  .center-content{padding:20px 24px;min-width:0;}
+  .center-view{display:none;}
+  .center-view.active{display:block;}
+
+  .kb-hint{
+    font-size:11.5px;color:var(--muted);margin:8px 0 0;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;
+  }
+
+  /* ---- 右側:播放器+逐字稿+留言 ---- */
+  .player-sidebar{
+    position:sticky;top:0;height:100vh;overflow-y:auto;
+    border-left:1px solid var(--line);padding:16px;
+    scrollbar-width:thin;
+  }
+  .player-sidebar .panel{margin-top:14px;}
+  .player-sidebar .panel-body{max-height:280px;}
+
+  .pl-sidebar-head{margin-bottom:12px;}
+  .pl-sidebar-head select{
+    width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);
+    padding:8px 10px;border-radius:8px;font-size:13px;outline:none;
+  }
+  .playlist-items-list .pl-item{
+    display:flex;align-items:flex-start;gap:8px;padding:8px 4px;
+    border-bottom:1px solid var(--line);font-size:12.5px;cursor:pointer;
+  }
+  .playlist-items-list .pl-item:hover{color:var(--accent);}
+  .playlist-items-list .pl-item input{margin-top:3px;flex-shrink:0;cursor:pointer;}
+  .playlist-items-list .pl-item .pl-item-title{flex:1;line-height:1.5;}
+  .playlist-items-list .pl-item-channel{color:var(--muted);font-size:11.5px;}
+  .pl-browse-item{
+    padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;
+    border:1px solid var(--line);margin-bottom:8px;background:var(--surface);
+  }
+  .pl-browse-item:hover{border-color:var(--accent);}
+  .pl-browse-item.active{border-color:var(--accent);background:var(--accent-dim);}
+  .pl-browse-item .pl-browse-count{color:var(--muted);font-size:11.5px;margin-top:3px;}
+  .customfeed-input-row{display:flex;gap:6px;margin-bottom:12px;}
+  .customfeed-input-row input{
+    flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);
+    padding:8px 10px;border-radius:8px;font-size:12.5px;outline:none;
+  }
+  .customfeed-hint{font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6;}
+  .home-view-box{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;margin-bottom:16px;font-size:13px;color:var(--muted);line-height:1.8;
+  }
+  .home-view-box b{color:var(--text);}
+  .cm-add-cat input{
+    flex:1;background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    padding:8px 12px;border-radius:8px;font-size:13px;outline:none;
+  }
+  .cm-updated{display:flex;align-items:center;gap:5px;min-width:70px;flex-shrink:0;}
+  .update-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;}
+  .cm-unsub-btn{font-size:11.5px;padding:0 10px;height:28px;flex-shrink:0;color:#e08888;}
+  .cm-unsub-btn:hover{border-color:#e08888;}
+
+  /* ---- 手機/窄螢幕:三欄改成上下堆疊,播放器排最上面 ---- */
+  @media (max-width: 900px){
+    .app-shell{ grid-template-columns:1fr; display:flex; flex-direction:column; }
+    .sidebar, .player-sidebar{
+      position:static;height:auto;border:none;
+      border-bottom:1px solid var(--line);
+    }
+    .player-sidebar{ order:1; }
+    .sidebar{ order:2; }
+    .center-content{ order:3; padding:16px; }
+  }
+
+  /* ---- 固定在畫面上方的回頂端/回底端按鈕(桌機+手機都有,全螢幕看影片時自動隱藏) ---- */
+  .scroll-nav-fixed{
+    position:fixed;top:10px;right:14px;z-index:999;
+    display:flex;gap:6px;
+  }
+  .scroll-nav-fixed button{
+    background:var(--surface);border:1px solid var(--line);color:var(--text);
+    width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:15px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+  .scroll-nav-fixed button:hover{border-color:var(--accent);color:var(--accent);}
+</style>
+</head>
+<body>
+
+<div class="scroll-nav-fixed" id="scrollNavFixed">
+  <button id="scrollTopBtn" title="回到頂端">⬆</button>
+  <button id="scrollBottomBtn" title="回到底端">⬇</button>
+</div>
+
+<div class="slate">
+  <div class="clap"></div>
+  <h1>逐字稿站</h1>
+  <span class="tag">Transcript &amp; Comment Desk</span>
+  <div class="topbar-actions">
+    <button class="btn primary" id="loginBtn">登入 Google 帳號</button>
+    <button class="btn" id="logoutBtn" style="display:none">登出</button>
+  </div>
+</div>
+
+<div class="app-shell" id="appShell">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-pinned">
+      <div class="search-row">
+        <input id="q" type="text" placeholder="輸入關鍵字，或按麥克風語音輸入…" />
+        <button class="btn mic" id="micBtn" title="語音輸入">🎙️</button>
+        <button class="btn primary" id="searchBtn">搜尋</button>
+      </div>
+      <div class="filter-row">
+        <select id="filterDuration" title="影片時長">
+          <option value="any">任何長度</option>
+          <option value="short">短片(&lt;4分)</option>
+          <option value="medium">中等(4-20分)</option>
+          <option value="long">長片(&gt;20分)</option>
+        </select>
+        <select id="filterUploadDate" title="上傳時間">
+          <option value="any">任何時間</option>
+          <option value="today">今天</option>
+          <option value="week">這週</option>
+          <option value="month">這個月</option>
+          <option value="year">今年</option>
+        </select>
+        <select id="filterSort" title="排序">
+          <option value="relevance">相關性</option>
+          <option value="newest">最新</option>
+          <option value="oldest">最舊</option>
+          <option value="views">觀看數</option>
+        </select>
+      </div>
+      <div id="favoritesBar" class="favorites-bar" style="display:none"></div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" data-nav="search">🔍 搜尋結果</button>
+      <button class="nav-btn" id="subsNavBtn" data-nav="subscriptions" style="display:none">📺 我的訂閱</button>
+      <button class="nav-btn" id="playlistsNavBtn" data-nav="playlists" style="display:none">🎞️ 播放清單</button>
+      <button class="nav-btn" data-nav="customfeed">🧭 自訂動態</button>
+      <button class="nav-btn external" data-nav="home">🏠 YouTube 首頁推薦 <span>↗</span></button>
+    </nav>
+  </aside>
+
+  <main class="center-content" id="centerContent">
+    <div id="channelPage" class="channel-page" style="display:none"></div>
+    <div id="categoryManager" class="category-manager" style="display:none"></div>
+
+    <div id="searchView" class="center-view active">
+      <div id="channelPreview" class="channel-preview" style="display:none"></div>
+      <div id="resultsLabel" class="results-label" style="display:none">全部影片</div>
+      <div class="selection-bar" id="searchSelectionBar" style="display:none">
+        <span id="searchSelCount">已選 0 部影片</span>
+        <button class="btn" id="searchPlayQueueBtn">▶ 依序播放</button>
+        <button class="btn" id="searchDownloadTranscriptsBtn">下載逐字稿</button>
+        <button class="btn" id="searchDownloadCommentsBtn">下載留言</button>
+        <button class="btn" id="searchClearSelectionBtn">清除勾選</button>
+      </div>
+      <div id="results" class="results"></div>
+    </div>
+
+    <div id="subsView" class="center-view">
+      <div class="subs-toolbar">
+        <h3>依分類篩選訂閱頻道</h3>
+        <button class="btn" id="manageCategoriesBtn">管理頻道分類</button>
+      </div>
+      <div id="categoryGroups" class="category-groups"></div>
+      <div class="subs-apply-row">
+        <button class="btn" id="saveFavoriteBtn">另存為我的最愛</button>
+        <button class="btn primary" id="subsApplyBtn">套用篩選</button>
+      </div>
+      <div class="selection-bar" id="subsSelectionBar" style="display:none;margin-top:16px;">
+        <span id="subsSelCount">已選 0 部影片</span>
+        <button class="btn" id="subsPlayQueueBtn">▶ 依序播放</button>
+        <button class="btn" id="subsDownloadTranscriptsBtn">下載逐字稿</button>
+        <button class="btn" id="subsDownloadCommentsBtn">下載留言</button>
+        <button class="btn" id="subsClearSelectionBtn">清除勾選</button>
+      </div>
+      <div id="subsFeed" class="results" style="margin-top:16px;"></div>
+    </div>
+
+    <div id="playlistsView" class="center-view">
+      <div id="playlistDetailBox" style="display:none;margin-bottom:18px;">
+        <div class="pl-sidebar-head">
+          <select id="playlistSwitcher"></select>
+        </div>
+        <div class="selection-bar" id="plItemToolbar" style="display:none">
+          <span id="plItemSelCount">已選 0 部影片</span>
+          <button class="btn" id="plBulkPlayBtn">▶ 依序播放</button>
+          <button class="btn" id="plBulkRemoveBtn">移出此清單</button>
+          <select id="plMoveTargetSelect"></select>
+          <button class="btn" id="plBulkMoveBtn">移到選定清單</button>
+          <button class="btn" id="plClearSelectionBtn">清除勾選</button>
+        </div>
+        <div id="playlistItemsList" class="playlist-items-list"></div>
+      </div>
+      <div id="playlistsBrowseList"></div>
+    </div>
+
+    <div id="customfeedView" class="center-view">
+      <div class="customfeed-input-row">
+        <input id="customFeedInput" placeholder="例如：kendo, finance uploaded in past 1 month">
+        <button class="btn primary" id="customFeedApplyBtn">套用</button>
+      </div>
+      <div class="customfeed-hint">
+        用逗號分隔多個關鍵字；可加一句「uploaded in past N day/week/month/year」限制更新時間，
+        也會套用左側欄的時長／發佈時間篩選。
+        ＊這是關鍵字進階搜尋,不是YouTube真實的個人化推薦演算法(該演算法未對外開放API)。
+      </div>
+      <div class="selection-bar" id="customfeedSelectionBar" style="display:none">
+        <span id="customfeedSelCount">已選 0 部影片</span>
+        <button class="btn" id="customfeedPlayQueueBtn">▶ 依序播放</button>
+        <button class="btn" id="customfeedDownloadTranscriptsBtn">下載逐字稿</button>
+        <button class="btn" id="customfeedDownloadCommentsBtn">下載留言</button>
+        <button class="btn" id="customfeedClearSelectionBtn">清除勾選</button>
+      </div>
+      <div id="customFeedResults" class="results"></div>
+    </div>
+
+    <div id="homeView" class="center-view">
+      <div class="home-view-box">
+        <b>為什麼不是真的 YouTube 首頁推薦？</b><br>
+        YouTube 的「為你推薦」「New to you」是 Google 內部機器學習系統，從未對外開放 API，
+        任何第三方工具都無法真正重現這個演算法。<br><br>
+        點左側「🏠 YouTube 首頁推薦」按鈕，已經幫你在新分頁打開了真正的 YouTube 首頁（你自己帳號的真實推薦）。<br><br>
+        如果想在這個 App 裡用關鍵字＋時間條件做「類推薦」的動態牆，可以用下面這顆按鈕：
+      </div>
+      <button class="btn primary" id="homeGoCustomFeedBtn">前往「自訂動態」</button>
+    </div>
+  </main>
+
+  <aside class="player-sidebar" id="playerSidebar">
+    <div id="nowPlaying" class="now-playing" style="display:none"></div>
+    <div id="playerWrap" class="player-wrap" style="display:none">
+      <div id="ytPlayer"></div>
+    </div>
+    <div class="kb-hint" id="kbHint">
+      💡 播放中用 <b>Shift + .</b> 加速、<b>Shift + ,</b> 減速（不用點進畫面，網頁上按就有效）
+      <span id="rateIndicator" style="display:none;margin-left:8px;color:var(--accent);font-weight:600;"></span>
+    </div>
+
+    <div class="panel" id="transcriptPanel" style="display:none">
+      <div class="panel-head">
+        <span class="dot"></span>
+        <h2>逐字稿</h2>
+        <button class="btn" id="toggleTranscript">展開</button>
+        <button class="btn" id="copyTranscript">一鍵複製(含時間軸)</button>
+      </div>
+      <div class="panel-body collapsed" id="transcriptBody"><div class="empty">尚未選取影片</div></div>
+    </div>
+
+    <div class="panel" id="commentsPanel" style="display:none">
+      <div class="panel-head">
+        <span class="dot" style="background:var(--mint)"></span>
+        <h2>留言</h2>
+        <button class="btn" id="toggleComments">展開</button>
+        <button class="btn" id="copyComments">一鍵複製</button>
+      </div>
+      <div class="panel-body collapsed" id="commentsBody"><div class="empty">尚未選取影片</div></div>
+    </div>
+  </aside>
+</div>
+
+
+
+
+
+
+
+
+<script>
+
+
+
+
+
+
+
+
+// ====== 設定：後端 API 位址 ======
+// 本機執行 Flask 後端時預設是這個位址；若你把後端部署到雲端，改成雲端網址即可。
+const API_BASE = "";  // 同源部署,留空即可(相對路徑呼叫 /api/...)
+
+// ---------- 固定在畫面上方的回頂端/回底端按鈕 ----------
+document.getElementById('scrollTopBtn')?.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+document.getElementById('scrollBottomBtn')?.addEventListener('click', () => {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+});
+
+// 全螢幕看影片時,把這顆固定按鈕藏起來,不然會蓋在影片畫面上
+function updateScrollNavVisibility() {
+  const bar = document.getElementById('scrollNavFixed');
+  if (!bar) return;
+  const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  bar.style.display = isFullscreen ? 'none' : 'flex';
+}
+document.addEventListener('fullscreenchange', updateScrollNavVisibility);
+document.addEventListener('webkitfullscreenchange', updateScrollNavVisibility);
+
+const els = {
+  q: document.getElementById('q'),
+  micBtn: document.getElementById('micBtn'),
+  searchBtn: document.getElementById('searchBtn'),
+  results: document.getElementById('results'),
+  resultsLabel: document.getElementById('resultsLabel'),
+  channelPreview: document.getElementById('channelPreview'),
+  channelPage: document.getElementById('channelPage'),
+  subsView: document.getElementById('subsView'),
+  favoritesBar: document.getElementById('favoritesBar'),
+  categoryGroups: document.getElementById('categoryGroups'),
+  categoryManager: document.getElementById('categoryManager'),
+  manageCategoriesBtn: document.getElementById('manageCategoriesBtn'),
+  saveFavoriteBtn: document.getElementById('saveFavoriteBtn'),
+  subsApplyBtn: document.getElementById('subsApplyBtn'),
+  subsFeed: document.getElementById('subsFeed'),
+  loginBtn: document.getElementById('loginBtn'),
+  logoutBtn: document.getElementById('logoutBtn'),
+  subsNavBtn: document.getElementById('subsNavBtn'),
+  playlistsNavBtn: document.getElementById('playlistsNavBtn'),
+  nowPlaying: document.getElementById('nowPlaying'),
+  transcriptPanel: document.getElementById('transcriptPanel'),
+  transcriptBody: document.getElementById('transcriptBody'),
+  commentsPanel: document.getElementById('commentsPanel'),
+  commentsBody: document.getElementById('commentsBody'),
+  copyTranscript: document.getElementById('copyTranscript'),
+  copyComments: document.getElementById('copyComments'),
+};
+
+let lastTranscriptText = "";       // 純文字版(給一般閱讀用途,目前未使用複製)
+let lastTranscriptWithTime = "";   // 含時間軸版(一鍵複製用)
+let lastCommentsText = "";
+let lastSearchQuery = "";          // 供頻道頁「返回搜尋」使用
+let currentChannel = null;         // {url, name, sort, q} 記住目前頻道頁狀態,供排序/搜尋切換使用
+let channelSelection = new Map();  // 頻道頁內目前勾選的影片: video_id -> video物件
+
+// ---------- Google 登入狀態 ----------
+async function checkAuthStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/status`);
+    const data = await res.json();
+    const display = data.logged_in ? 'inline-flex' : 'none';
+    els.loginBtn.style.display = data.logged_in ? 'none' : 'inline-flex';
+    els.logoutBtn.style.display = data.logged_in ? 'inline-flex' : 'none';
+    els.subsNavBtn.style.display = display;
+    els.playlistsNavBtn.style.display = display;
+  } catch (err) {
+    // 後端還沒啟動之類的情況,靜默失敗即可,不影響其他功能使用
+  }
+}
+checkAuthStatus();
+
+els.loginBtn.addEventListener('click', () => {
+  window.location.href = `${API_BASE}/auth/login`;
+});
+els.logoutBtn.addEventListener('click', async () => {
+  await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+  const detailBox = document.getElementById('playlistDetailBox');
+  if (detailBox) detailBox.style.display = 'none';
+  switchSidebarView('search');
+  checkAuthStatus();
+});
+
+// ---------- 中央內容區導覽切換 ----------
+let viewGeneration = 0; // 每次切換導覽視圖就+1;非同步函式渲染前會檢查這個值,過期就放棄渲染
+
+function switchSidebarView(view) {
+  viewGeneration++;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.nav === view));
+  // 強制隱藏「所有」.center-view(而不是只靠id清單),避免任何遺漏造成上一個畫面殘留
+  document.querySelectorAll('.center-view').forEach(el => { el.style.display = 'none'; });
+  const idMap = { search: 'searchView', subscriptions: 'subsView', playlists: 'playlistsView', customfeed: 'customfeedView', home: 'homeView' };
+  const target = document.getElementById(idMap[view]);
+  if (target) target.style.display = 'block';
+  // 手機上是整頁捲動(不是centerContent內部捲動),切換頁籤時捲回頂部,避免看起來像「舊內容還在上面」
+  window.scrollTo(0, 0);
+  const centerEl = document.getElementById('centerContent');
+  if (centerEl) centerEl.scrollTop = 0;
+}
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const view = btn.dataset.nav;
+    if (view === 'home') {
+      window.open('https://www.youtube.com/', '_blank');
+    }
+    switchSidebarView(view);
+    if (view === 'subscriptions') {
+      if (!allSubscriptions.length) showSubscriptionsView();
+      else { renderFavoritesBar(); renderCategoryGroups(); }
+    } else if (view === 'playlists') {
+      loadPlaylistsBrowseList();
+    }
+  });
+});
+
+document.getElementById('homeGoCustomFeedBtn')?.addEventListener('click', () => {
+  switchSidebarView('customfeed');
+});
+
+// ---------- 語音輸入 ----------
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  const rec = new SpeechRecognition();
+  rec.lang = 'zh-TW';
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  els.micBtn.addEventListener('click', () => {
+    els.micBtn.classList.add('listening');
+    rec.start();
+  });
+  rec.onresult = (e) => {
+    els.q.value = e.results[0][0].transcript;
+    els.micBtn.classList.remove('listening');
+    doSearch();
+  };
+  rec.onerror = () => els.micBtn.classList.remove('listening');
+  rec.onend = () => els.micBtn.classList.remove('listening');
+} else {
+  els.micBtn.title = "此瀏覽器不支援語音輸入";
+  els.micBtn.style.opacity = 0.4;
+}
+
+// ---------- 搜尋 ----------
+els.searchBtn.addEventListener('click', doSearch);
+els.q.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+// 偵測輸入是否為YouTube連結或11碼video_id,是的話直接載入該影片,不用搜尋
+function detectDirectVideo(text) {
+  text = text.trim();
+  const patterns = [
+    /(?:v=|youtu\.be\/|shorts\/)([0-9A-Za-z_-]{11})/,
+    /^([0-9A-Za-z_-]{11})$/,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function getSearchFilterParams() {
+  const duration = document.getElementById('filterDuration')?.value || 'any';
+  const uploadDate = document.getElementById('filterUploadDate')?.value || 'any';
+  const sort = document.getElementById('filterSort')?.value || 'relevance';
+  return { duration, uploadDate, sort };
+}
+
+async function doSearch() {
+  const query = els.q.value.trim();
+  if (!query) return;
+
+  switchSidebarView('search');
+  const myGen = viewGeneration;
+  els.subsView.style.display = 'none';
+
+  const directId = detectDirectVideo(query);
+  if (directId) {
+    hideChannelPage();
+    els.channelPreview.style.display = 'none';
+    els.results.innerHTML = '';
+    els.resultsLabel.style.display = 'none';
+    selectVideo({ video_id: directId, title: '(依連結直接載入)', channel: '', channel_url: '' });
+    return;
+  }
+
+  lastSearchQuery = query;
+  hideChannelPage();
+  els.channelPreview.style.display = 'none';
+  els.results.innerHTML = '<div class="loading">搜尋中…</div>';
+  els.resultsLabel.style.display = 'none';
+  try {
+    const { duration, uploadDate, sort } = getSearchFilterParams();
+    const params = new URLSearchParams({ q: query, limit: 12, duration, upload_date: uploadDate, sort });
+    const res = await fetch(`${API_BASE}/api/search?${params.toString()}`);
+    const data = await res.json();
+    if (myGen !== viewGeneration) return; // 使用者已經切到別的畫面,不要再渲染過期的結果
+    if (data.error) throw new Error(data.error);
+    if (data.channel) renderChannelPreview(data.channel);
+    els.resultsLabel.style.display = 'block';
+    searchSelection.clear('#results');
+    renderResults(data.results, els.results, {
+      selectable: true,
+      onToggle: (v, checked) => searchSelection.toggle(v, checked),
+    });
+  } catch (err) {
+    els.results.innerHTML = `<div class="err">搜尋失敗：${err.message}（請確認後端 Flask 伺服器已啟動）</div>`;
+  }
+}
+
+// ---------- 頻道預覽卡(搜尋結果最上方,比照YouTube搜尋頁的頻道卡片) ----------
+function renderChannelPreview(ch) {
+  if (!ch || !ch.name) { els.channelPreview.style.display = 'none'; return; }
+  const initials = ch.name.slice(0, 2);
+  const subs = ch.subscriber_count ? formatCount(ch.subscriber_count) + ' 位訂閱者' : '';
+  els.channelPreview.style.display = 'flex';
+  els.channelPreview.innerHTML = `
+    <div class="avatar">${escapeHtml(initials)}</div>
+    <div class="cp-info">
+      <div class="name">${escapeHtml(ch.name)}</div>
+      <div class="meta">${subs}${ch.video_count ? ' · ' + ch.video_count + ' 部影片' : ''}</div>
+      ${ch.description ? `<div class="desc">${escapeHtml(ch.description)}</div>` : ''}
+    </div>
+    <div class="cp-actions"><button class="btn primary" id="viewChannelBtn">查看頻道</button></div>
+  `;
+  document.getElementById('viewChannelBtn').addEventListener('click', () => showChannelPage(ch));
+}
+
+function formatCount(n) {
+  if (n >= 10000) return (n / 10000).toFixed(1) + '萬';
+  return String(n);
+}
+
+function renderResults(list, container, opts = {}) {
+  const target = container || els.results;
+  if (!list || !list.length) {
+    target.innerHTML = '<div class="empty">沒有找到結果</div>';
+    return;
+  }
+  target.innerHTML = '';
+  list.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const meta = formatVideoMeta(v);
+    card.innerHTML = `
+      ${opts.selectable ? `<label class="card-select"><input type="checkbox" class="vid-check"></label>` : ''}
+      <img src="${v.thumbnail}" alt="">
+      <div class="info">
+        <div class="title">${escapeHtml(v.title)}</div>
+        <div class="channel" data-channel-url="${escapeHtml(v.channel_url || '')}">${escapeHtml(v.channel || '')}</div>
+        ${meta ? `<div class="meta">${meta}</div>` : ''}
+      </div>`;
+    card.querySelector('.title').addEventListener('click', () => selectVideo(v));
+    card.querySelector('img').addEventListener('click', () => selectVideo(v));
+    const channelEl = card.querySelector('.channel');
+    if (v.channel_url) {
+      channelEl.addEventListener('click', (e) => { e.stopPropagation(); loadChannel(v.channel_url); });
+    } else {
+      card.addEventListener('click', () => selectVideo(v));
+    }
+    if (opts.selectable) {
+      const checkbox = card.querySelector('.vid-check');
+      checkbox.addEventListener('click', (e) => e.stopPropagation());
+      checkbox.addEventListener('change', () => opts.onToggle && opts.onToggle(v, checkbox.checked));
+    }
+    target.appendChild(card);
+  });
+}
+
+// 組合「觀看次數 · 發佈時間」這行小字,兩個資料源(yt-dlp的upload_date / Data API的published_at)都支援
+function formatVideoMeta(v) {
+  const parts = [];
+  if (v.view_count) parts.push(formatCount(v.view_count) + '次觀看');
+  const dateStr = formatRelativeDate(v.upload_date, v.published_at);
+  if (dateStr) parts.push(dateStr);
+  return parts.join(' · ');
+}
+
+function formatRelativeDate(uploadDateYYYYMMDD, publishedAtISO) {
+  let d = null;
+  if (uploadDateYYYYMMDD && uploadDateYYYYMMDD.length === 8) {
+    const y = uploadDateYYYYMMDD.slice(0, 4), m = uploadDateYYYYMMDD.slice(4, 6), day = uploadDateYYYYMMDD.slice(6, 8);
+    d = new Date(`${y}-${m}-${day}T00:00:00`);
+  } else if (publishedAtISO) {
+    d = new Date(publishedAtISO);
+  }
+  if (!d || isNaN(d.getTime())) return '';
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return '今天';
+  if (days < 30) return `${days}天前`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}個月前`;
+  return `${Math.floor(months / 12)}年前`;
+}
+
+// ---------- 獨立頻道頁面(比照YouTube頻道主頁layout) ----------
+async function loadChannel(channelUrl, opts = {}) {
+  els.subsView.style.display = 'none';
+  const sort = opts.sort || (currentChannel && currentChannel.url === channelUrl ? currentChannel.sort : 'newest') || 'newest';
+  const q = opts.q !== undefined ? opts.q : '';
+
+  showChannelPage({ url: channelUrl, name: (currentChannel && currentChannel.url === channelUrl) ? currentChannel.name : '', videos: null, sort, q });
+  try {
+    const params = new URLSearchParams({ url: channelUrl, limit: 24, sort });
+    if (q) params.set('q', q);
+    const res = await fetch(`${API_BASE}/api/channel?${params.toString()}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    data.sort = sort;
+    data.q = q;
+    showChannelPage(data);
+  } catch (err) {
+    const box = els.channelPage.querySelector('.cpage-videos');
+    if (box) box.innerHTML = `<div class="err">頻道讀取失敗：${err.message}</div>`;
+  }
+}
+
+function showChannelPage(ch) {
+  // 切換畫面:隱藏搜尋結果/頻道預覽卡/訂閱頁,顯示頻道頁(全寬,暫時隱藏側邊欄)
+  document.body.classList.add('channel-mode');
+  els.results.innerHTML = '';
+  els.resultsLabel.style.display = 'none';
+  els.channelPreview.style.display = 'none';
+  els.subsView.style.display = 'none';
+  els.channelPage.style.display = 'block';
+
+  currentChannel = { url: ch.url, name: ch.name, sort: ch.sort || 'newest', q: ch.q || '' };
+
+  const initials = (ch.name || '?').slice(0, 2);
+  const subs = ch.subscriber_count ? formatCount(ch.subscriber_count) + ' 位訂閱者' : '';
+  const sort = ch.sort || 'newest';
+
+  els.channelPage.innerHTML = `
+    <button class="btn back-btn" id="backToSearchBtn">← 返回搜尋</button>
+    <div class="cpage-banner"></div>
+    <div class="cpage-head">
+      <div class="avatar lg">${escapeHtml(initials)}</div>
+      <div class="name">${escapeHtml(ch.name || '載入中…')}</div>
+      <div class="meta">${subs}${ch.video_count ? ' · ' + ch.video_count + ' 部影片' : ''}</div>
+      ${ch.description ? `<div class="desc">${escapeHtml(ch.description)}</div>` : ''}
+      <div class="cpage-tabs">
+        <span class="tab-videos active">影片</span>
+        <span class="tab-playlists">播放清單</span>
+      </div>
+      <div class="cpage-controls">
+        <input id="chSearchInput" placeholder="搜尋此頻道的影片…" value="${escapeHtml(ch.q || '')}">
+        <button class="btn" id="chSearchBtn">搜尋</button>
+        <div class="sort-group">
+          <button class="btn sort-btn ${sort==='newest'?'active':''}" data-sort="newest">最新</button>
+          <button class="btn sort-btn ${sort==='oldest'?'active':''}" data-sort="oldest">最舊</button>
+          <button class="btn sort-btn ${sort==='views'?'active':''}" data-sort="views">觀看數</button>
+        </div>
+      </div>
+      ${ch.search_scope_note ? `<div class="scope-note">＊${escapeHtml(ch.search_scope_note)}</div>` : ''}
+    </div>
+
+    <div class="selection-bar" id="selectionBar" style="display:none">
+      <span id="selCount">已選 0 部影片</span>
+      <button class="btn" id="playQueueBtn">▶ 依序播放</button>
+      <button class="btn" id="downloadTranscriptsBtn">下載逐字稿</button>
+      <button class="btn" id="downloadCommentsBtn">下載留言</button>
+      <button class="btn" id="clearSelectionBtn">清除勾選</button>
+    </div>
+
+    <div class="results cpage-videos" style="margin-top:16px;">
+      ${ch.videos ? '' : '<div class="loading">讀取影片中…</div>'}
+    </div>
+    <div class="cpage-playlists" style="display:none;margin-top:16px;"></div>
+
+    <div id="queuePlayerWrap" class="player-wrap" style="display:none">
+      <div id="queuePlayer"></div>
+    </div>
+    <div id="queueLabel" class="queue-label" style="display:none"></div>
+  `;
+
+  document.getElementById('backToSearchBtn').addEventListener('click', backToSearch);
+  document.getElementById('chSearchBtn').addEventListener('click', () => {
+    loadChannel(ch.url, { q: document.getElementById('chSearchInput').value.trim(), sort: currentChannel.sort });
+  });
+  document.getElementById('chSearchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('chSearchBtn').click();
+  });
+  els.channelPage.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadChannel(ch.url, { sort: btn.dataset.sort, q: currentChannel.q }));
+  });
+  els.channelPage.querySelector('.tab-playlists').addEventListener('click', () => showChannelPlaylists(ch.url));
+  els.channelPage.querySelector('.tab-videos').addEventListener('click', () => {
+    els.channelPage.querySelector('.cpage-videos').style.display = 'grid';
+    els.channelPage.querySelector('.cpage-playlists').style.display = 'none';
+    els.channelPage.querySelector('.tab-videos').classList.add('active');
+    els.channelPage.querySelector('.tab-playlists').classList.remove('active');
+  });
+
+  channelSelection = new Map(); // 每次重新進入/切換排序或搜尋時,勾選狀態重置
+  updateSelectionBar();
+  document.getElementById('playQueueBtn').addEventListener('click', playSelectedQueue);
+  document.getElementById('downloadTranscriptsBtn').addEventListener('click', () => downloadSelectedText('transcript'));
+  document.getElementById('downloadCommentsBtn').addEventListener('click', () => downloadSelectedText('comments'));
+  document.getElementById('clearSelectionBtn').addEventListener('click', () => {
+    channelSelection.clear();
+    els.channelPage.querySelectorAll('.vid-check').forEach(cb => cb.checked = false);
+    updateSelectionBar();
+  });
+
+  if (ch.videos) {
+    renderResults(ch.videos, els.channelPage.querySelector('.cpage-videos'), {
+      selectable: true,
+      onToggle: (v, checked) => {
+        if (checked) channelSelection.set(v.video_id, v);
+        else channelSelection.delete(v.video_id);
+        updateSelectionBar();
+      },
+    });
+  }
+}
+
+// ---------- 頻道頁:勾選影片工具列 ----------
+function updateSelectionBar() {
+  const bar = document.getElementById('selectionBar');
+  if (!bar) return; // 已經切換離開頻道頁
+  const count = channelSelection.size;
+  document.getElementById('selCount').textContent = `已選 ${count} 部影片`;
+  bar.style.display = count > 0 ? 'flex' : 'none';
+}
+
+// ---------- 依序播放勾選影片(用YouTube官方IFrame Player API,才能偵測播完自動接下一部) ----------
+let ytQueuePlayer = null;
+let playQueueList = [];
+let playQueueIndex = 0;
+
+function loadYouTubeIframeAPI() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  return new Promise((resolve) => {
+    window.onYouTubeIframeAPIReady = resolve;
+    if (!document.getElementById('yt-iframe-api-script')) {
+      const tag = document.createElement('script');
+      tag.id = 'yt-iframe-api-script';
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+  });
+}
+
+async function playSelectedQueue() {
+  const videos = [...channelSelection.values()];
+  if (!videos.length) return;
+  playQueueList = videos;
+  playQueueIndex = 0;
+
+  const wrap = document.getElementById('queuePlayerWrap');
+  const label = document.getElementById('queueLabel');
+  wrap.style.display = 'block';
+  label.style.display = 'block';
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  updateQueueLabel();
+
+  await loadYouTubeIframeAPI();
+
+  if (ytQueuePlayer && ytQueuePlayer.loadVideoById) {
+    ytQueuePlayer.loadVideoById(playQueueList[0].video_id);
+    return;
+  }
+  ytQueuePlayer = new YT.Player('queuePlayer', {
+    height: '100%',
+    width: '100%',
+    videoId: playQueueList[0].video_id,
+    playerVars: { autoplay: 1 },
+    events: {
+      onStateChange: (e) => {
+        if (e.data === YT.PlayerState.ENDED) {
+          playQueueIndex++;
+          if (playQueueIndex < playQueueList.length) {
+            ytQueuePlayer.loadVideoById(playQueueList[playQueueIndex].video_id);
+            updateQueueLabel();
+          } else {
+            updateQueueLabel(true);
+          }
+        }
+      },
+    },
+  });
+}
+
+function updateQueueLabel(finished = false) {
+  const label = document.getElementById('queueLabel');
+  if (!label) return;
+  if (finished) {
+    label.textContent = `已播完全部 ${playQueueList.length} 部勾選影片`;
+    return;
+  }
+  const v = playQueueList[playQueueIndex];
+  label.textContent = `依序播放中：第 ${playQueueIndex + 1} / ${playQueueList.length} 部 － ${v.title}`;
+}
+
+// ---------- 批次下載勾選影片的逐字稿或留言(合併成一個txt,每段開頭附影片標題) ----------
+async function downloadSelectedText(kind) {
+  const videos = [...channelSelection.values()];
+  if (!videos.length) return;
+
+  const btnId = kind === 'transcript' ? 'downloadTranscriptsBtn' : 'downloadCommentsBtn';
+  const btn = document.getElementById(btnId);
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+
+  let combined = '';
+  for (let i = 0; i < videos.length; i++) {
+    const v = videos[i];
+    btn.textContent = `下載中… (${i + 1}/${videos.length})`;
+    combined += `\n${'='.repeat(10)} ${v.title} ${'='.repeat(10)}\n`;
+    combined += `https://www.youtube.com/watch?v=${v.video_id}\n\n`;
+    try {
+      if (kind === 'transcript') {
+        const res = await fetch(`${API_BASE}/api/transcript?video=${v.video_id}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        combined += data.segments.map(s => `[${formatTime(s.start)}] ${s.text}`).join('\n') + '\n';
+      } else {
+        const res = await fetch(`${API_BASE}/api/comments?video=${v.video_id}&limit=50`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        combined += data.comments
+          .map(c => `${c.author}${c.time ? ' (' + c.time + ')' : ''}：${c.text}`)
+          .join('\n\n') + '\n';
+      }
+    } catch (err) {
+      combined += `[抓取失敗：${err.message}]\n`;
+    }
+  }
+
+  btn.textContent = originalLabel;
+  btn.disabled = false;
+  const filename = kind === 'transcript' ? '逐字稿彙整.txt' : '留言彙整.txt';
+  triggerTextDownload(combined, filename);
+}
+
+function triggerTextDownload(text, filename) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ================= 通用批次選取控制器(搜尋/我的訂閱/自訂動態共用) =================
+// 頻道頁(showChannelPage)有自己獨立的一套勾選/下載/播放邏輯,這裡不動它,
+// 這裡是給另外三個地方(搜尋結果/訂閱動態/自訂動態)共用的版本。
+function makeSelectionController(prefix) {
+  const map = new Map();
+
+  function updateBar() {
+    const bar = document.getElementById(`${prefix}SelectionBar`);
+    if (!bar) return;
+    const countEl = document.getElementById(`${prefix}SelCount`);
+    if (countEl) countEl.textContent = `已選 ${map.size} 部影片`;
+    bar.style.display = map.size > 0 ? 'flex' : 'none';
+  }
+
+  function toggle(v, checked) {
+    if (checked) map.set(v.video_id, v);
+    else map.delete(v.video_id);
+    updateBar();
+  }
+
+  function clear(containerSelector) {
+    map.clear();
+    if (containerSelector) {
+      document.querySelectorAll(`${containerSelector} .vid-check`).forEach(cb => { cb.checked = false; });
+    }
+    updateBar();
+  }
+
+  const playBtn = document.getElementById(`${prefix}PlayQueueBtn`);
+  const dlTBtn = document.getElementById(`${prefix}DownloadTranscriptsBtn`);
+  const dlCBtn = document.getElementById(`${prefix}DownloadCommentsBtn`);
+
+  if (playBtn) playBtn.addEventListener('click', () => playSelectedQueueGeneric([...map.values()]));
+  if (dlTBtn) dlTBtn.addEventListener('click', () => downloadSelectedTextGeneric([...map.values()], 'transcript', dlTBtn));
+  if (dlCBtn) dlCBtn.addEventListener('click', () => downloadSelectedTextGeneric([...map.values()], 'comments', dlCBtn));
+
+  return { toggle, updateBar, clear, map };
+}
+
+async function playSelectedQueueGeneric(videos) {
+  if (!videos.length) return;
+  genericQueueList = videos;
+  genericQueueIndex = 0;
+  await selectVideo(genericQueueList[0], { fromQueue: true });
+}
+
+async function downloadSelectedTextGeneric(videos, kind, btn) {
+  if (!videos.length) return;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+
+  let combined = '';
+  for (let i = 0; i < videos.length; i++) {
+    const v = videos[i];
+    btn.textContent = `下載中… (${i + 1}/${videos.length})`;
+    combined += `\n${'='.repeat(10)} ${v.title} ${'='.repeat(10)}\n`;
+    combined += `https://www.youtube.com/watch?v=${v.video_id}\n\n`;
+    try {
+      if (kind === 'transcript') {
+        const res = await fetch(`${API_BASE}/api/transcript?video=${v.video_id}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        combined += data.segments.map(s => `[${formatTime(s.start)}] ${s.text}`).join('\n') + '\n';
+      } else {
+        const res = await fetch(`${API_BASE}/api/comments?video=${v.video_id}&limit=50`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        combined += data.comments
+          .map(c => `${c.author}${c.time ? ' (' + c.time + ')' : ''}：${c.text}`)
+          .join('\n\n') + '\n';
+      }
+    } catch (err) {
+      combined += `[抓取失敗：${err.message}]\n`;
+    }
+  }
+
+  btn.textContent = originalLabel;
+  btn.disabled = false;
+  const filename = kind === 'transcript' ? '逐字稿彙整.txt' : '留言彙整.txt';
+  triggerTextDownload(combined, filename);
+}
+
+const searchSelection = makeSelectionController('search');
+const subsSelection = makeSelectionController('subs');
+const customfeedSelection = makeSelectionController('customfeed');
+
+// clear按鈕要清掉畫面上實際的checkbox,補上各自對應的容器選擇器
+document.getElementById('searchClearSelectionBtn')?.addEventListener('click', () => searchSelection.clear('#results'));
+document.getElementById('subsClearSelectionBtn')?.addEventListener('click', () => subsSelection.clear('#subsFeed'));
+document.getElementById('customfeedClearSelectionBtn')?.addEventListener('click', () => customfeedSelection.clear('#customFeedResults'));
+
+async function showChannelPlaylists(channelUrl) {
+  const videosBox = els.channelPage.querySelector('.cpage-videos');
+  const plBox = els.channelPage.querySelector('.cpage-playlists');
+  videosBox.style.display = 'none';
+  plBox.style.display = 'grid';
+  plBox.className = 'results cpage-playlists';
+  els.channelPage.querySelector('.tab-playlists').classList.add('active');
+  els.channelPage.querySelector('.tab-videos').classList.remove('active');
+  plBox.innerHTML = '<div class="loading">讀取播放清單中…</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/channel_playlists?url=${encodeURIComponent(channelUrl)}&limit=20`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (!data.playlists.length) {
+      plBox.innerHTML = '<div class="empty">此頻道沒有公開播放清單</div>';
+      return;
+    }
+    plBox.innerHTML = '';
+    data.playlists.forEach(pl => {
+      const card = document.createElement('div');
+      card.className = 'playlist-card';
+      card.innerHTML = `
+        ${pl.thumbnail ? `<img src="${pl.thumbnail}">` : ''}
+        <div class="pl-info">
+          <div class="pl-title">${escapeHtml(pl.title)}</div>
+          <div class="pl-count">${pl.video_count ? pl.video_count + ' 部影片' : ''} · 點擊在YouTube開啟</div>
+        </div>`;
+      card.addEventListener('click', () => window.open(pl.url, '_blank'));
+      plBox.appendChild(card);
+    });
+  } catch (err) {
+    plBox.innerHTML = `<div class="err">播放清單讀取失敗：${err.message}</div>`;
+  }
+}
+
+function hideChannelPage() {
+  document.body.classList.remove('channel-mode');
+  els.channelPage.style.display = 'none';
+  els.channelPage.innerHTML = '';
+}
+
+function backToSearch() {
+  hideChannelPage();
+  switchSidebarView('search');
+  if (lastSearchQuery) {
+    els.q.value = lastSearchQuery;
+    doSearch();
+  } else {
+    els.results.innerHTML = '';
+  }
+}
+
+// ---------- 訂閱頁面(分類篩選 + 我的最愛 + 依時間排序的動態) ----------
+const CATEGORIES_KEY = 'yt_channel_categories';   // 舊版localStorage key,只用來做一次性搬移
+const FAVORITES_KEY = 'yt_favorite_filters';       // 舊版localStorage key,只用來做一次性搬移
+
+let allSubscriptions = [];   // 快取本次登入帳號的訂閱頻道清單(避免每次操作都重打API)
+let selectedChannelIds = new Set();
+
+// 分類/最愛現在存在後端伺服器上(不再只存瀏覽器localStorage),這樣手機/電腦打開同一個
+// 部署網址時看到的是同一份資料。這兩個cache變數在頁面載入後才會非同步填好,
+// 讀取一律用下面的同步函式(loadCategories/loadFavorites)存取cache,寫入時同步更新cache+送到後端。
+let categoriesCache = null;
+let favoritesCache = null;
+
+async function ensureCategoriesLoaded() {
+  if (categoriesCache !== null) return categoriesCache;
+  try {
+    const res = await fetch(`${API_BASE}/api/categories`);
+    const data = await res.json();
+    categoriesCache = data.categories || {};
+    // 第一次使用、伺服器上還沒有資料,但舊版localStorage有資料的話,搬一次上去
+    if (Object.keys(categoriesCache).length === 0) {
+      const legacy = _readLegacyLocalStorage(CATEGORIES_KEY, {});
+      if (Object.keys(legacy).length > 0) {
+        categoriesCache = legacy;
+        saveCategories(categoriesCache);
+      }
+    }
+  } catch (err) {
+    categoriesCache = _readLegacyLocalStorage(CATEGORIES_KEY, {}); // 後端連不上時,退回本機資料
+  }
+  return categoriesCache;
+}
+
+async function ensureFavoritesLoaded() {
+  if (favoritesCache !== null) return favoritesCache;
+  try {
+    const res = await fetch(`${API_BASE}/api/favorites`);
+    const data = await res.json();
+    favoritesCache = data.favorites || [];
+    if (favoritesCache.length === 0) {
+      const legacy = _readLegacyLocalStorage(FAVORITES_KEY, []);
+      if (legacy.length > 0) {
+        favoritesCache = legacy;
+        saveFavorites(favoritesCache);
+      }
+    }
+  } catch (err) {
+    favoritesCache = _readLegacyLocalStorage(FAVORITES_KEY, []);
+  }
+  return favoritesCache;
+}
+
+function _readLegacyLocalStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadCategories() {
+  return categoriesCache || {};
+}
+function saveCategories(map) {
+  categoriesCache = map;
+  fetch(`${API_BASE}/api/categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ categories: map }),
+  }).catch(() => {}); // 存伺服器失敗不阻斷UI,下次載入會用cache的內容
+}
+function loadFavorites() {
+  return favoritesCache || [];
+}
+function saveFavorites(list) {
+  favoritesCache = list;
+  fetch(`${API_BASE}/api/favorites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ favorites: list }),
+  }).catch(() => {});
+}
+
+async function showSubscriptionsView() {
+  hideChannelPage();
+  const myGen = viewGeneration;
+  els.channelPreview.style.display = 'none';
+  els.results.innerHTML = '';
+  els.resultsLabel.style.display = 'none';
+  els.subsView.style.display = 'block';
+  els.categoryManager.style.display = 'none';
+  els.categoryGroups.innerHTML = '<div class="loading">讀取訂閱頻道中…</div>';
+  els.subsFeed.innerHTML = '';
+
+  try {
+    const [subsRes] = await Promise.all([
+      fetch(`${API_BASE}/api/subscriptions`),
+      ensureCategoriesLoaded(),
+      ensureFavoritesLoaded(),
+    ]);
+    const data = await subsRes.json();
+    if (myGen !== viewGeneration) return; // 使用者已經切到別的畫面
+    if (data.error) throw new Error(data.error);
+    allSubscriptions = data.subscriptions;
+
+    selectedChannelIds = new Set(allSubscriptions.map(s => s.channel_id)); // 預設全選
+    renderFavoritesBar();
+    renderCategoryGroups();
+    loadSubsFeed([...selectedChannelIds]);
+  } catch (err) {
+    if (myGen !== viewGeneration) return;
+    els.categoryGroups.innerHTML = `<div class="err">訂閱清單讀取失敗：${err.message}</div>`;
+  }
+}
+
+// 把頻道依分類分組;沒有貼標籤的歸到「未分類」
+function groupChannelsByCategory() {
+  const catMap = loadCategories();
+  const groups = {};
+  allSubscriptions.forEach(c => {
+    const tags = catMap[c.channel_id] && catMap[c.channel_id].length ? catMap[c.channel_id] : ['未分類'];
+    tags.forEach(tag => {
+      if (!groups[tag]) groups[tag] = [];
+      groups[tag].push(c);
+    });
+  });
+  return groups;
+}
+
+function renderCategoryGroups() {
+  const groups = groupChannelsByCategory();
+  const names = Object.keys(groups).sort((a, b) => a === '未分類' ? 1 : b === '未分類' ? -1 : a.localeCompare(b));
+
+  els.categoryGroups.innerHTML = names.map(name => {
+    const channels = groups[name];
+    const selectedCount = channels.filter(c => selectedChannelIds.has(c.channel_id)).length;
+    const state = selectedCount === 0 ? '' : selectedCount === channels.length ? 'all-selected' : 'some-selected';
+    return `
+      <div class="category-group" data-cat="${escapeHtml(name)}">
+        <div class="category-header ${state}">
+          <span class="cat-check"></span>
+          <span class="cat-name">${escapeHtml(name)}</span>
+          <span class="cat-count">${channels.length}個頻道</span>
+          <span class="cat-arrow">▸</span>
+        </div>
+        <div class="category-body collapsed">
+          ${channels.map(c => `
+            <div class="subs-channel-chip ${selectedChannelIds.has(c.channel_id) ? 'selected' : ''}" data-cid="${c.channel_id}">
+              ${c.thumbnail ? `<img class="avatar" src="${c.thumbnail}">` : `<span class="avatar">${escapeHtml(c.title.slice(0,1))}</span>`}
+              <span>${escapeHtml(c.title)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  // 點分類標題 = 整組一鍵勾選/取消(點擊標題本身切換,箭頭另外控制展開/收合)
+  els.categoryGroups.querySelectorAll('.category-group').forEach(group => {
+    const catName = group.dataset.cat;
+    const header = group.querySelector('.category-header');
+    const body = group.querySelector('.category-body');
+    const arrow = header.querySelector('.cat-arrow');
+
+    header.addEventListener('click', (e) => {
+      if (e.target === arrow) {
+        body.classList.toggle('collapsed');
+        arrow.classList.toggle('open');
+        return;
+      }
+      const channels = groupChannelsByCategory()[catName];
+      const allSelected = channels.every(c => selectedChannelIds.has(c.channel_id));
+      channels.forEach(c => {
+        if (allSelected) selectedChannelIds.delete(c.channel_id);
+        else selectedChannelIds.add(c.channel_id);
+      });
+      renderCategoryGroups();
+    });
+
+    group.querySelectorAll('.subs-channel-chip').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cid = chip.dataset.cid;
+        if (selectedChannelIds.has(cid)) selectedChannelIds.delete(cid);
+        else selectedChannelIds.add(cid);
+        renderCategoryGroups();
+      });
+    });
+  });
+}
+
+els.subsApplyBtn.addEventListener('click', () => {
+  loadSubsFeed([...selectedChannelIds]);
+});
+
+async function loadSubsFeed(channelIds) {
+  if (!channelIds.length) {
+    els.subsFeed.innerHTML = '<div class="empty">尚未勾選任何頻道</div>';
+    return;
+  }
+  const myGen = viewGeneration;
+  els.subsFeed.innerHTML = '<div class="loading">讀取訂閱動態中…</div>';
+  try {
+    const { duration, uploadDate } = getSearchFilterParams();
+    const params = new URLSearchParams({
+      channels: channelIds.join(','),
+      per_channel: 5,
+      duration,
+      upload_date: uploadDate,
+    });
+    const res = await fetch(`${API_BASE}/api/subscriptions_feed?${params.toString()}`);
+    const data = await res.json();
+    if (myGen !== viewGeneration) return; // 使用者已經切到別的畫面
+    if (data.error) throw new Error(data.error);
+    subsSelection.clear('#subsFeed');
+    renderResults(data.videos, els.subsFeed, {
+      selectable: true,
+      onToggle: (v, checked) => subsSelection.toggle(v, checked),
+    });
+  } catch (err) {
+    if (myGen !== viewGeneration) return;
+    els.subsFeed.innerHTML = `<div class="err">訂閱動態讀取失敗：${err.message}</div>`;
+  }
+}
+
+// ---------- 分類管理面板(手動幫每個頻道貼標籤) ----------
+els.manageCategoriesBtn.addEventListener('click', () => {
+  const isOpen = els.categoryManager.style.display !== 'none';
+  els.categoryManager.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderCategoryManager();
+});
+
+function getAllCategoryNames() {
+  const catMap = loadCategories();
+  const set = new Set();
+  Object.values(catMap).forEach(tags => tags.forEach(t => set.add(t)));
+  return [...set].sort();
+}
+
+function renderCategoryManager() {
+  const catMap = loadCategories();
+  const existingCats = getAllCategoryNames();
+
+  els.categoryManager.innerHTML = `
+    <div class="cm-add-cat">
+      <input id="newCatInput" placeholder="新增分類名稱,例如：劍道 / 財經 / 體育…">
+      <button class="btn primary" id="newCatBtn">新增分類</button>
+    </div>
+    <div id="cmRows">
+      ${allSubscriptions.map(c => {
+        const tags = catMap[c.channel_id] || [];
+        return `
+        <div class="cm-row" data-cid="${c.channel_id}" data-subid="${c.subscription_id || ''}">
+          <span class="cm-updated" id="upd-${c.channel_id}" title="最後更新時間">
+            <span class="loading" style="font-size:11px;">讀取中…</span>
+          </span>
+          <span class="cm-name">${escapeHtml(c.title)}</span>
+          <div class="cm-tags">
+            ${existingCats.map(cat => `
+              <span class="cm-tag ${tags.includes(cat) ? 'active' : ''}" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
+            `).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何分類,先在上面新增一個</span>'}
+          </div>
+          <button class="btn cm-unsub-btn" data-cid="${c.channel_id}">取消訂閱</button>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  document.getElementById('newCatBtn').addEventListener('click', () => {
+    const input = document.getElementById('newCatInput');
+    const name = input.value.trim();
+    if (!name) return;
+    input.value = '';
+    tempNewCategories.add(name);
+    renderCategoryManager();
+  });
+
+  els.categoryManager.querySelectorAll('.cm-tag').forEach(tagEl => {
+    tagEl.addEventListener('click', () => {
+      const cid = tagEl.closest('.cm-row').dataset.cid;
+      const cat = tagEl.dataset.cat;
+      const map = loadCategories();
+      const tags = new Set(map[cid] || []);
+      if (tags.has(cat)) tags.delete(cat); else tags.add(cat);
+      map[cid] = [...tags];
+      saveCategories(map);
+      tagEl.classList.toggle('active');
+      renderCategoryGroups(); // 訂閱頁下方的分類群組同步更新
+    });
+  });
+
+  els.categoryManager.querySelectorAll('.cm-unsub-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.cm-row');
+      const cid = row.dataset.cid;
+      const subId = row.dataset.subid;
+      if (!confirm('確定要取消訂閱這個頻道嗎？')) return;
+      btn.textContent = '處理中…';
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/api/unsubscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription_id: subId }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        allSubscriptions = allSubscriptions.filter(s => s.channel_id !== cid);
+        selectedChannelIds.delete(cid);
+        row.remove();
+        renderCategoryGroups();
+      } catch (err) {
+        btn.textContent = '失敗';
+        alert('取消訂閱失敗：' + err.message);
+      }
+    });
+  });
+
+  loadLastUpdatedDots();
+}
+
+// 批次查詢每個頻道最後更新時間,3天內顯示綠點
+async function loadLastUpdatedDots() {
+  const ids = allSubscriptions.map(c => c.channel_id);
+  if (!ids.length) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/channels_last_video?channels=${ids.join(',')}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    Object.entries(data.last_updated).forEach(([cid, publishedAt]) => {
+      const el = document.getElementById(`upd-${cid}`);
+      if (!el) return;
+      if (!publishedAt) { el.innerHTML = '<span style="color:var(--muted);font-size:11px;">無資料</span>'; return; }
+      const days = Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000);
+      const isRecent = days <= 3;
+      el.innerHTML = `${isRecent ? '<span class="update-dot"></span>' : ''}<span style="font-size:11px;color:var(--muted);">${formatRelativeDate(null, publishedAt)}</span>`;
+    });
+  } catch (err) {
+    // 查詢失敗不影響其他功能,靜默處理即可
+  }
+}
+
+// 暫存「使用者剛新增但還沒套用到任何頻道」的分類名稱,讓管理面板上先顯示出來可以點
+let tempNewCategories = new Set();
+const _origGetAllCategoryNames = getAllCategoryNames;
+getAllCategoryNames = function () {
+  return [...new Set([..._origGetAllCategoryNames(), ...tempNewCategories])].sort();
+};
+
+// ---------- 我的最愛(儲存/套用篩選組合) ----------
+els.saveFavoriteBtn.addEventListener('click', () => {
+  const ids = [...selectedChannelIds];
+  if (!ids.length) { alert('請先勾選至少一個頻道'); return; }
+  const name = prompt('幫這個篩選組合取個名字(例如：劍道+財經)');
+  if (!name) return;
+  const favorites = loadFavorites();
+  favorites.push({ id: Date.now().toString(), name, channelIds: ids });
+  saveFavorites(favorites);
+  renderFavoritesBar();
+});
+
+function renderFavoritesBar() {
+  const favorites = loadFavorites();
+  if (!favorites.length) { els.favoritesBar.style.display = 'none'; return; }
+  els.favoritesBar.style.display = 'flex';
+  els.favoritesBar.innerHTML = favorites.map(f => `
+    <div class="fav-pill" data-fid="${f.id}">
+      <span class="fav-name">⭐ ${escapeHtml(f.name)}</span>
+      <span class="fav-del" title="刪除">✕</span>
+    </div>`).join('');
+
+  els.favoritesBar.querySelectorAll('.fav-pill').forEach(pill => {
+    const fid = pill.dataset.fid;
+    pill.querySelector('.fav-name').addEventListener('click', () => {
+      const fav = loadFavorites().find(f => f.id === fid);
+      if (!fav) return;
+      selectedChannelIds = new Set(fav.channelIds);
+      renderCategoryGroups();
+      loadSubsFeed([...selectedChannelIds]);
+    });
+    pill.querySelector('.fav-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveFavorites(loadFavorites().filter(f => f.id !== fid));
+      renderFavoritesBar();
+    });
+  });
+}
+
+// ---------- 選取影片 -> 抓逐字稿 + 留言 ----------
+let mainPlayer = null;         // 主播放器的YT.Player物件(非佇列播放器)
+let currentPlaybackRate = 1;
+const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+let genericQueueList = [];     // 搜尋/訂閱/自訂動態的「依序播放」佇列(共用主播放器)
+let genericQueueIndex = 0;
+
+async function selectVideo(v, opts = {}) {
+  if (!opts.fromQueue) { genericQueueList = []; genericQueueIndex = 0; } // 單獨點擊播放時,清空佇列避免誤續播
+
+  els.nowPlaying.style.display = 'block';
+  const meta = formatVideoMeta(v);
+  const queueTag = genericQueueList.length
+    ? ` <span class="meta">(依序播放 ${genericQueueIndex + 1}/${genericQueueList.length})</span>` : '';
+  els.nowPlaying.innerHTML = `正在載入：<b>${escapeHtml(v.title)}</b>${meta ? ` <span class="meta">· ${meta}</span>` : ''}${queueTag}`;
+
+  const playerWrap = document.getElementById('playerWrap');
+  playerWrap.style.display = 'block';
+  playerWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  els.transcriptPanel.style.display = 'block';
+  els.commentsPanel.style.display = 'block';
+  els.transcriptBody.innerHTML = '<div class="loading">逐字稿擷取中…</div>';
+  els.commentsBody.innerHTML = '<div class="loading">留言擷取中…</div>';
+  // 每次選新影片,逐字稿/留言面板重置為收起狀態(預設只顯示標題列+複製按鈕)
+  setPanelCollapsed('transcript', true);
+  setPanelCollapsed('comments', true);
+
+  loadTranscript(v.video_id);
+  loadComments(v.video_id);
+
+  // 用YouTube官方Player API載入(而非純iframe),這樣才能用程式控制播放速度(Shift+./Shift+,快捷鍵)
+  await loadYouTubeIframeAPI();
+  currentPlaybackRate = 1;
+  updateRateIndicator();
+  if (mainPlayer && mainPlayer.loadVideoById) {
+    mainPlayer.loadVideoById(v.video_id);
+  } else {
+    mainPlayer = new YT.Player('ytPlayer', {
+      height: '100%',
+      width: '100%',
+      videoId: v.video_id,
+      playerVars: { autoplay: 1 },
+      events: {
+        onPlaybackRateChange: (e) => {
+          currentPlaybackRate = e.data;
+          updateRateIndicator();
+        },
+        onStateChange: (e) => {
+          if (e.data === YT.PlayerState.ENDED && genericQueueList.length) {
+            genericQueueIndex++;
+            if (genericQueueIndex < genericQueueList.length) {
+              selectVideo(genericQueueList[genericQueueIndex], { fromQueue: true });
+            } else {
+              genericQueueList = [];
+              genericQueueIndex = 0;
+            }
+          }
+        },
+      },
+    });
+  }
+}
+
+function updateRateIndicator() {
+  const el = document.getElementById('rateIndicator');
+  if (!el) return;
+  if (currentPlaybackRate === 1) {
+    el.style.display = 'none';
+  } else {
+    el.style.display = 'inline';
+    el.textContent = `播放速度 ${currentPlaybackRate}x`;
+  }
+}
+
+// ---------- 全域快捷鍵:Shift+. 加速 / Shift+, 減速(對目前正在播放的主播放器生效) ----------
+document.addEventListener('keydown', (e) => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return; // 打字時不要誤觸
+  if (!e.shiftKey) return;
+  if (!mainPlayer || !mainPlayer.setPlaybackRate) return;
+
+  if (e.key === '.' || e.key === '>') {
+    const idx = PLAYBACK_RATES.indexOf(currentPlaybackRate);
+    const next = PLAYBACK_RATES[Math.min(idx + 1, PLAYBACK_RATES.length - 1)];
+    mainPlayer.setPlaybackRate(next);
+    currentPlaybackRate = next;
+    updateRateIndicator();
+    e.preventDefault();
+  } else if (e.key === ',' || e.key === '<') {
+    const idx = PLAYBACK_RATES.indexOf(currentPlaybackRate);
+    const prev = PLAYBACK_RATES[Math.max(idx - 1, 0)];
+    mainPlayer.setPlaybackRate(prev);
+    currentPlaybackRate = prev;
+    updateRateIndicator();
+    e.preventDefault();
+  }
+});
+
+async function loadTranscript(videoId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/transcript?video=${videoId}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    lastTranscriptText = data.full_text;
+    lastTranscriptWithTime = data.segments
+      .map(s => `[${formatTime(s.start)}] ${s.text}`)
+      .join('\n');
+    els.transcriptBody.innerHTML = data.segments.map(s => `
+      <div class="seg">
+        <span class="ts">${formatTime(s.start)}</span>
+        <span>${escapeHtml(s.text)}</span>
+      </div>`).join('');
+  } catch (err) {
+    els.transcriptBody.innerHTML = `<div class="err">${err.message}</div>`;
+    lastTranscriptText = "";
+    lastTranscriptWithTime = "";
+  }
+}
+
+async function loadComments(videoId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/comments?video=${videoId}&limit=50`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    lastCommentsText = data.comments
+      .map(c => `${c.author}${c.time ? ' (' + c.time + ')' : ''}: ${c.text}`)
+      .join('\n\n');
+    els.commentsBody.innerHTML = data.comments.map(c => `
+      <div class="comment">
+        <span class="author">${escapeHtml(c.author || '匿名')}</span>
+        <span class="votes">👍 ${c.votes ?? 0}</span>
+        ${c.time ? `<span class="ctime">${escapeHtml(c.time)}</span>` : ''}
+        <div class="ctext">${escapeHtml(c.text)}</div>
+      </div>`).join('') || '<div class="empty">沒有留言</div>';
+  } catch (err) {
+    els.commentsBody.innerHTML = `<div class="err">${err.message}</div>`;
+    lastCommentsText = "";
+  }
+}
+
+// ---------- 一鍵複製 ----------
+els.copyTranscript.addEventListener('click', () => copyToClipboard(lastTranscriptWithTime, els.copyTranscript));
+els.copyComments.addEventListener('click', () => copyToClipboard(lastCommentsText, els.copyComments));
+
+// ---------- 逐字稿/留言面板展開/收起(預設收起,只顯示標題列+複製按鈕) ----------
+function setPanelCollapsed(which, collapsed) {
+  const bodyId = which === 'transcript' ? 'transcriptBody' : 'commentsBody';
+  const btnId = which === 'transcript' ? 'toggleTranscript' : 'toggleComments';
+  const body = document.getElementById(bodyId);
+  const btn = document.getElementById(btnId);
+  if (body) body.classList.toggle('collapsed', collapsed);
+  if (btn) btn.textContent = collapsed ? '展開' : '收起';
+}
+
+document.getElementById('toggleTranscript')?.addEventListener('click', () => {
+  const collapsed = !document.getElementById('transcriptBody').classList.contains('collapsed');
+  setPanelCollapsed('transcript', collapsed);
+});
+document.getElementById('toggleComments')?.addEventListener('click', () => {
+  const collapsed = !document.getElementById('commentsBody').classList.contains('collapsed');
+  setPanelCollapsed('comments', collapsed);
+});
+
+function copyToClipboard(text, btn) {
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '已複製 ✓';
+    setTimeout(() => btn.textContent = old, 1200);
+  });
+}
+
+function formatTime(sec) {
+  sec = Math.floor(sec);
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = (sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+function escapeHtml(str) {
+  return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- PWA Service Worker 註冊 ----------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// ================= 播放清單瀏覽(使用者自己帳號底下的Playlist) =================
+let userPlaylists = [];
+let currentPlaylistId = null;
+
+async function loadPlaylistsBrowseList() {
+  const container = document.getElementById('playlistsBrowseList');
+  const myGen = viewGeneration;
+  container.innerHTML = '<div class="loading">讀取播放清單中…</div>';
+  try {
+    const res = await fetch(`${API_BASE}/api/my_playlists`);
+    const data = await res.json();
+    if (myGen !== viewGeneration) return; // 使用者已經切到別的畫面
+    if (data.error) throw new Error(data.error);
+    userPlaylists = data.playlists;
+    renderPlaylistsBrowseList();
+  } catch (err) {
+    if (myGen !== viewGeneration) return;
+    container.innerHTML = `<div class="err">播放清單讀取失敗：${err.message}</div>`;
+  }
+}
+
+function renderPlaylistsBrowseList() {
+  const container = document.getElementById('playlistsBrowseList');
+  if (!userPlaylists.length) {
+    container.innerHTML = '<div class="empty">這個帳號沒有播放清單</div>';
+    return;
+  }
+  container.innerHTML = userPlaylists.map(p => `
+    <div class="pl-browse-item ${p.playlist_id === currentPlaylistId ? 'active' : ''}" data-pid="${p.playlist_id}">
+      <div>${escapeHtml(p.title)}</div>
+      <div class="pl-browse-count">${p.video_count ?? 0} 部影片</div>
+    </div>`).join('');
+  container.querySelectorAll('.pl-browse-item').forEach(el => {
+    el.addEventListener('click', () => openPlaylist(el.dataset.pid));
+  });
+}
+
+let plItemSelection = new Map(); // playlist_item_id -> {playlist_item_id, video_id, title}
+
+async function openPlaylist(playlistId) {
+  currentPlaylistId = playlistId;
+  renderPlaylistsBrowseList();
+  plItemSelection.clear();
+
+  const switcher = document.getElementById('playlistSwitcher');
+  switcher.innerHTML = userPlaylists
+    .map(p => `<option value="${p.playlist_id}" ${p.playlist_id === playlistId ? 'selected' : ''}>${escapeHtml(p.title)}</option>`)
+    .join('');
+
+  const moveSelect = document.getElementById('plMoveTargetSelect');
+  if (moveSelect) {
+    moveSelect.innerHTML = userPlaylists
+      .filter(p => p.playlist_id !== playlistId)
+      .map(p => `<option value="${p.playlist_id}">${escapeHtml(p.title)}</option>`)
+      .join('');
+  }
+
+  document.getElementById('playlistDetailBox').style.display = 'block';
+  document.getElementById('playlistDetailBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const list = document.getElementById('playlistItemsList');
+  list.innerHTML = '<div class="loading">讀取影片中…</div>';
+  try {
+    const res = await fetch(`${API_BASE}/api/playlist_items?playlist_id=${playlistId}&limit=200`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderPlaylistItemsList(data.items);
+  } catch (err) {
+    list.innerHTML = `<div class="err">${err.message}</div>`;
+  }
+}
+
+function updatePlItemToolbar() {
+  const bar = document.getElementById('plItemToolbar');
+  if (!bar) return;
+  bar.style.display = plItemSelection.size > 0 ? 'flex' : 'none';
+  const countEl = document.getElementById('plItemSelCount');
+  if (countEl) countEl.textContent = `已選 ${plItemSelection.size} 部影片`;
+}
+
+function renderPlaylistItemsList(items) {
+  const list = document.getElementById('playlistItemsList');
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">這個播放清單是空的</div>';
+    updatePlItemToolbar();
+    return;
+  }
+  list.innerHTML = items.map(it => `
+    <div class="pl-item" data-plitemid="${it.playlist_item_id}" data-vid="${it.video_id}" data-title="${escapeHtml(it.title)}" data-channel="${escapeHtml(it.channel || '')}">
+      <input type="checkbox" class="vid-check" title="勾選">
+      <span class="pl-item-title">${escapeHtml(it.title)}${it.channel ? ` <span class="pl-item-channel">· ${escapeHtml(it.channel)}</span>` : ''}</span>
+    </div>`).join('');
+
+  list.querySelectorAll('.pl-item').forEach(row => {
+    const plItemId = row.dataset.plitemid;
+    const checkbox = row.querySelector('.vid-check');
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        plItemSelection.set(plItemId, {
+          playlist_item_id: plItemId,
+          video_id: row.dataset.vid,
+          title: row.dataset.title,
+          channel: row.dataset.channel,
+        });
+      } else {
+        plItemSelection.delete(plItemId);
+      }
+      updatePlItemToolbar();
+    });
+    row.querySelector('.pl-item-title').addEventListener('click', () => {
+      selectVideo({ video_id: row.dataset.vid, title: row.dataset.title, channel: row.dataset.channel });
+    });
+  });
+  updatePlItemToolbar();
+}
+
+// 依畫面上實際排列順序(而非勾選的先後順序)取出已勾選的影片,供依序播放使用
+function getSelectedPlItemsInOrder() {
+  const rows = document.querySelectorAll('#playlistItemsList .pl-item');
+  const ordered = [];
+  rows.forEach(row => {
+    const id = row.dataset.plitemid;
+    if (plItemSelection.has(id)) ordered.push(plItemSelection.get(id));
+  });
+  return ordered;
+}
+
+document.getElementById('plBulkPlayBtn')?.addEventListener('click', () => {
+  playSelectedQueueGeneric(getSelectedPlItemsInOrder());
+});
+
+// ---------- 播放清單勾選後的批次操作:移出清單 / 移到其他清單 ----------
+document.getElementById('plBulkRemoveBtn')?.addEventListener('click', async () => {
+  const items = [...plItemSelection.values()];
+  if (!items.length) return;
+  if (!confirm(`確定要把這 ${items.length} 部影片從目前的播放清單移除嗎？`)) return;
+
+  const btn = document.getElementById('plBulkRemoveBtn');
+  const original = btn.textContent;
+  for (let i = 0; i < items.length; i++) {
+    btn.textContent = `移除中…(${i + 1}/${items.length})`;
+    try {
+      const res = await fetch(`${API_BASE}/api/playlist_remove_item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playlist_item_id: items[i].playlist_item_id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      document.querySelector(`.pl-item[data-plitemid="${items[i].playlist_item_id}"]`)?.remove();
+    } catch (err) {
+      alert(`「${items[i].title}」移除失敗：${err.message}`);
+    }
+  }
+  btn.textContent = original;
+  plItemSelection.clear();
+  updatePlItemToolbar();
+});
+
+document.getElementById('plBulkMoveBtn')?.addEventListener('click', async () => {
+  const items = [...plItemSelection.values()];
+  const targetId = document.getElementById('plMoveTargetSelect').value;
+  if (!items.length || !targetId) return;
+  if (targetId === currentPlaylistId) { alert('目標清單跟目前清單相同'); return; }
+
+  const btn = document.getElementById('plBulkMoveBtn');
+  const original = btn.textContent;
+  for (let i = 0; i < items.length; i++) {
+    btn.textContent = `搬移中…(${i + 1}/${items.length})`;
+    try {
+      const addRes = await fetch(`${API_BASE}/api/playlist_add_item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playlist_id: targetId, video_id: items[i].video_id }),
+      });
+      const addData = await addRes.json();
+      if (addData.error) throw new Error(addData.error);
+
+      const rmRes = await fetch(`${API_BASE}/api/playlist_remove_item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playlist_item_id: items[i].playlist_item_id }),
+      });
+      const rmData = await rmRes.json();
+      if (rmData.error) throw new Error(rmData.error);
+      document.querySelector(`.pl-item[data-plitemid="${items[i].playlist_item_id}"]`)?.remove();
+    } catch (err) {
+      alert(`「${items[i].title}」搬移失敗：${err.message}`);
+    }
+  }
+  btn.textContent = original;
+  plItemSelection.clear();
+  updatePlItemToolbar();
+});
+
+document.getElementById('plClearSelectionBtn')?.addEventListener('click', () => {
+  plItemSelection.clear();
+  document.querySelectorAll('#playlistItemsList .vid-check').forEach(cb => { cb.checked = false; });
+  updatePlItemToolbar();
+});
+
+const playlistSwitcherEl = document.getElementById('playlistSwitcher');
+if (playlistSwitcherEl) {
+  playlistSwitcherEl.addEventListener('change', (e) => openPlaylist(e.target.value));
+}
+
+// ================= 自訂動態(關鍵字+時間篩選的進階搜尋,非YouTube真實個人化推薦) =================
+const customFeedApplyBtnEl = document.getElementById('customFeedApplyBtn');
+if (customFeedApplyBtnEl) {
+  customFeedApplyBtnEl.addEventListener('click', runCustomFeed);
+}
+const customFeedInputEl = document.getElementById('customFeedInput');
+if (customFeedInputEl) {
+  customFeedInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runCustomFeed(); });
+}
+
+function parseCustomFeedQuery(raw) {
+  // 解析類似 "kendo, finance uploaded in past 1 month" 的輸入
+  // 抓出「uploaded in past N day/week/month/year」這段當作時間篩選,其餘逗號分隔的部分當關鍵字
+  let text = raw;
+  let uploadDate = 'any';
+  const timeMatch = text.match(/uploaded in past\s+\d*\s*(day|week|month|year)s?/i);
+  if (timeMatch) {
+    const unit = timeMatch[1].toLowerCase();
+    uploadDate = unit === 'day' ? 'today' : unit; // day->today, week/month/year對應後端參數
+    text = text.replace(timeMatch[0], '');
+  }
+  const keywords = text.split(',').map(k => k.trim()).filter(Boolean);
+  return { keywords, uploadDate };
+}
+
+async function runCustomFeed() {
+  const raw = document.getElementById('customFeedInput').value.trim();
+  const container = document.getElementById('customFeedResults');
+  const myGen = viewGeneration;
+  if (!raw) { container.innerHTML = '<div class="empty">請先輸入關鍵字</div>'; return; }
+
+  const { keywords, uploadDate: parsedUploadDate } = parseCustomFeedQuery(raw);
+  if (!keywords.length) { container.innerHTML = '<div class="empty">沒有偵測到關鍵字</div>'; return; }
+
+  // 文字裡有寫「uploaded in past ...」就優先用那個,沒有的話退回用左側欄的發佈時間篩選
+  const sidebarFilters = getSearchFilterParams();
+  const uploadDate = parsedUploadDate !== 'any' ? parsedUploadDate : sidebarFilters.uploadDate;
+  const duration = sidebarFilters.duration;
+
+  container.innerHTML = '<div class="loading">搜尋中…</div>';
+  try {
+    const allResults = [];
+    const seen = new Set();
+    for (const kw of keywords) {
+      const params = new URLSearchParams({ q: kw, limit: 10, sort: 'newest', upload_date: uploadDate, duration });
+      const res = await fetch(`${API_BASE}/api/search?${params.toString()}`);
+      const data = await res.json();
+      if (myGen !== viewGeneration) return; // 使用者已經切到別的畫面,中途放棄
+      if (data.error) continue; // 單一關鍵字失敗不中斷整體流程
+      for (const v of data.results) {
+        if (seen.has(v.video_id)) continue;
+        seen.add(v.video_id);
+        allResults.push(v);
+      }
+    }
+    if (myGen !== viewGeneration) return;
+    allResults.sort((a, b) => (b.upload_date || '') > (a.upload_date || '') ? 1 : -1);
+    customfeedSelection.clear('#customFeedResults');
+    renderResults(allResults, container, {
+      selectable: true,
+      onToggle: (v, checked) => customfeedSelection.toggle(v, checked),
+    });
+  } catch (err) {
+    container.innerHTML = `<div class="err">自訂動態讀取失敗：${err.message}</div>`;
+  }
+}
+
+
+
+
+
+
+
+
+</script>
+</body>
+</html>
