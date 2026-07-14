@@ -335,9 +335,9 @@
     grid-template-columns:260px minmax(0,1fr) 420px;
     align-items:start;
   }
-  body.channel-mode .app-shell{ grid-template-columns:1fr; }
-  body.channel-mode .sidebar,
-  body.channel-mode .player-sidebar{ display:none !important; }
+  body.channel-mode .app-shell{ grid-template-columns:minmax(0,1fr) 420px; }
+  body.channel-mode .sidebar{ display:none !important; }
+  /* 頻道頁時播放器仍要留在右側繼續播放,不能整個隱藏 */
 
   .sidebar{
     position:sticky;top:0;
@@ -417,6 +417,23 @@
     color:var(--muted);font-size:12.5px;cursor:pointer;
   }
   .video-info-bar .vib-channel:hover{color:var(--accent);text-decoration:underline;}
+  .video-info-bar .vib-date{color:var(--muted);font-size:12px;}
+
+  /* ---- 依序播放佇列(留言下方):可拖曳排序 ---- */
+  .queue-row{
+    display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;
+    border:1px solid var(--line);margin-bottom:6px;background:var(--surface);cursor:grab;
+  }
+  .queue-row.playing{border-color:var(--accent);background:var(--accent-dim);}
+  .queue-row.dragging{opacity:.4;}
+  .queue-row .queue-handle{color:var(--muted);flex-shrink:0;cursor:grab;user-select:none;}
+  .queue-row .queue-idx{width:20px;flex-shrink:0;color:var(--muted);font-size:11.5px;text-align:right;}
+  .queue-row .queue-title{flex:1;font-size:12.5px;line-height:1.4;cursor:pointer;}
+  .queue-row .queue-remove{
+    flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;
+    font-size:15px;width:24px;height:24px;border-radius:6px;
+  }
+  .queue-row .queue-remove:hover{color:#e08888;background:var(--line);}
   .video-info-bar .vib-actions{display:flex;gap:8px;margin-left:auto;position:relative;}
   .video-info-bar .vib-sub-btn{font-size:12px;padding:0 12px;height:28px;}
   .video-info-bar .vib-sub-btn.subscribed{color:var(--muted);}
@@ -469,6 +486,8 @@
     .player-sidebar{ order:1; }
     .sidebar{ order:2; }
     .center-content{ order:3; padding:16px; }
+    /* 手機上頻道頁一樣維持「播放器在最上面、頻道內容在下面」上下堆疊,不要硬擠兩欄 */
+    body.channel-mode .app-shell{ grid-template-columns:1fr; }
   }
 
   /* ---- 固定在畫面上方的回頂端/回底端按鈕(桌機+手機都有,全螢幕看影片時自動隱藏) ---- */
@@ -663,6 +682,14 @@
       </div>
       <div class="panel-body collapsed" id="commentsBody"><div class="empty">尚未選取影片</div></div>
     </div>
+
+    <div class="panel" id="queuePanel" style="display:none">
+      <div class="panel-head">
+        <span class="dot" style="background:var(--accent)"></span>
+        <h2>依序播放清單</h2>
+      </div>
+      <div class="panel-body" id="queueBody" style="max-height:none;"></div>
+    </div>
   </aside>
 </div>
 
@@ -730,6 +757,8 @@ const els = {
   transcriptBody: document.getElementById('transcriptBody'),
   commentsPanel: document.getElementById('commentsPanel'),
   commentsBody: document.getElementById('commentsBody'),
+  queuePanel: document.getElementById('queuePanel'),
+  queueBody: document.getElementById('queueBody'),
   copyTranscript: document.getElementById('copyTranscript'),
   copyComments: document.getElementById('copyComments'),
 };
@@ -1280,10 +1309,67 @@ function makeSelectionController(prefix) {
   return { toggle, updateBar, clear, map };
 }
 
+// ---------- 依序播放佇列面板(留言下方):顯示清單、可拖曳排序、可一鍵移出 ----------
+let queueDragFromIndex = null;
+
+function renderQueuePanel() {
+  if (!els.queuePanel) return;
+  if (!genericQueueList.length) { els.queuePanel.style.display = 'none'; return; }
+  els.queuePanel.style.display = 'block';
+  els.queueBody.innerHTML = genericQueueList.map((v, i) => `
+    <div class="queue-row ${i === genericQueueIndex ? 'playing' : ''}" draggable="true" data-idx="${i}">
+      <span class="queue-handle">⠿</span>
+      <span class="queue-idx">${i + 1}</span>
+      <span class="queue-title">${escapeHtml(v.title || '')}</span>
+      <button class="queue-remove" title="移出清單" data-idx="${i}">✕</button>
+    </div>`).join('');
+
+  els.queueBody.querySelectorAll('.queue-title').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = Number(el.closest('.queue-row').dataset.idx);
+      genericQueueIndex = idx;
+      selectVideo(genericQueueList[idx], { fromQueue: true });
+    });
+  });
+
+  els.queueBody.querySelectorAll('.queue-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      genericQueueList.splice(idx, 1);
+      if (idx < genericQueueIndex) genericQueueIndex--;
+      else if (idx === genericQueueIndex) genericQueueIndex = Math.min(genericQueueIndex, genericQueueList.length - 1);
+      if (!genericQueueList.length) { genericQueueIndex = 0; }
+      renderQueuePanel();
+    });
+  });
+
+  els.queueBody.querySelectorAll('.queue-row').forEach(row => {
+    row.addEventListener('dragstart', () => {
+      queueDragFromIndex = Number(row.dataset.idx);
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    row.addEventListener('dragover', (e) => e.preventDefault());
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const toIndex = Number(row.dataset.idx);
+      if (queueDragFromIndex === null || queueDragFromIndex === toIndex) return;
+      const wasPlayingItem = genericQueueList[genericQueueIndex];
+      const [moved] = genericQueueList.splice(queueDragFromIndex, 1);
+      genericQueueList.splice(toIndex, 0, moved);
+      genericQueueIndex = genericQueueList.indexOf(wasPlayingItem); // 拖曳後重新定位「目前正在播放」是哪一個
+      queueDragFromIndex = null;
+      renderQueuePanel();
+    });
+  });
+}
+
 async function playSelectedQueueGeneric(videos) {
   if (!videos.length) return;
   genericQueueList = videos;
   genericQueueIndex = 0;
+  renderQueuePanel();
   await selectVideo(genericQueueList[0], { fromQueue: true });
 }
 
@@ -1781,6 +1867,7 @@ let genericQueueIndex = 0;
 
 async function selectVideo(v, opts = {}) {
   if (!opts.fromQueue) { genericQueueList = []; genericQueueIndex = 0; } // 單獨點擊播放時,清空佇列避免誤續播
+  renderQueuePanel();
 
   els.nowPlaying.style.display = 'block';
   const meta = formatVideoMeta(v);
@@ -1832,6 +1919,7 @@ async function selectVideo(v, opts = {}) {
             } else {
               genericQueueList = [];
               genericQueueIndex = 0;
+              renderQueuePanel();
             }
           }
         },
@@ -1847,14 +1935,29 @@ function renderVideoInfoBar(v) {
   bar.style.display = 'flex';
   const channelId = v.channel_id || '';
   const channelUrl = v.channel_url || '';
+  const dateStr = formatRelativeDate(v.upload_date, v.published_at);
   bar.innerHTML = `
     <div class="vib-title">${escapeHtml(v.title || '')}</div>
     ${v.channel ? `<span class="vib-channel">${escapeHtml(v.channel)}</span>` : ''}
+    ${dateStr ? `<span class="vib-date">· ${escapeHtml(dateStr)}</span>` : ''}
     <div class="vib-actions">
       ${channelId ? `<button class="btn vib-sub-btn" id="vibSubBtn">…</button>` : ''}
+      <button class="btn vib-copylink-btn" id="vibCopyLinkBtn">🔗 複製連結</button>
       <button class="btn vib-addpl-btn" id="vibAddPlBtn">＋ 加入播放清單</button>
       <div class="vib-pl-menu" id="vibPlMenu"></div>
     </div>`;
+
+  document.getElementById('vibCopyLinkBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('vibCopyLinkBtn');
+    try {
+      await navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${v.video_id}`);
+      btn.textContent = '✓ 已複製';
+      setTimeout(() => { btn.textContent = '🔗 複製連結'; }, 1500);
+    } catch (err) {
+      btn.textContent = '複製失敗';
+      setTimeout(() => { btn.textContent = '🔗 複製連結'; }, 1500);
+    }
+  });
 
   const channelEl = bar.querySelector('.vib-channel');
   if (channelEl && channelUrl) {
@@ -1984,7 +2087,7 @@ function closeAddToPlaylistMenuOnOutsideClick(e) {
   menu.classList.remove('open');
 }
 
-// ---------- 子母畫面邏輯:影片播放中、播放器捲出畫面外時,自動縮到右下角 ----------
+// ---------- 子母畫面邏輯:影片播放中,只要播放器原本位置被捲出視野或使用者去做其他操作,就縮到右下角 ----------
 function isVideoPlaying() {
   try {
     return !!(mainPlayer && mainPlayer.getPlayerState && typeof YT !== 'undefined'
@@ -1992,26 +2095,35 @@ function isVideoPlaying() {
   } catch (e) { return false; }
 }
 
+let _sentinelVisible = true;
+
 function updateMiniPlayer() {
   const wrap = document.getElementById('playerWrap');
-  const sent = document.getElementById('playerSentinel');
-  if (!wrap || !sent || wrap.style.display === 'none') return;
-  if (!isVideoPlaying()) { wrap.classList.remove('mini'); return; }
-  // sentinel是播放器原本位置的錨點(mini時播放器脫離文流,但錨點留在原地),
-  // 錨點還在畫面上=使用者看得到播放器原位=不需要mini;捲走了才縮小
-  const r = sent.getBoundingClientRect();
-  const anchorVisible = r.bottom > 0 && r.top < window.innerHeight * 0.6;
-  wrap.classList.toggle('mini', !anchorVisible);
+  if (!wrap || wrap.style.display === 'none') return;
+  const shouldMini = isVideoPlaying() && !_sentinelVisible;
+  wrap.classList.toggle('mini', shouldMini);
 }
 
-window.addEventListener('scroll', updateMiniPlayer, { passive: true });
-const _centerScrollEl = document.getElementById('centerContent');
-if (_centerScrollEl) _centerScrollEl.addEventListener('scroll', updateMiniPlayer, { passive: true });
-setInterval(updateMiniPlayer, 1200); // 暫停/繼續播放沒有捲動事件可以觸發,用低頻輪詢補上
+const _sentinelObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => { _sentinelVisible = entry.isIntersecting; });
+  updateMiniPlayer();
+}, { threshold: 0 });
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sentinel = document.getElementById('playerSentinel');
+  if (sentinel) _sentinelObserver.observe(sentinel);
+});
+// script放在body最後面執行,DOMContentLoaded這時可能已經觸發過了,保險起見立即也嘗試綁一次
+(() => {
+  const sentinel = document.getElementById('playerSentinel');
+  if (sentinel) _sentinelObserver.observe(sentinel);
+})();
+
+setInterval(updateMiniPlayer, 1000); // 暫停/繼續播放沒有捲動或交叉事件可以觸發,用低頻輪詢補上
 
 document.getElementById('miniExpandBtn').addEventListener('click', (e) => {
   e.stopPropagation();
-  window.scrollTo({ top: 0, behavior: 'smooth' }); // 捲回頂部後,updateMiniPlayer會自動還原成完整播放器
+  window.scrollTo({ top: 0, behavior: 'smooth' }); // 捲回頂部後,IntersectionObserver會自動判定sentinel重新可見,還原成完整播放器
 });
 
 function updateRateIndicator() {
@@ -2228,7 +2340,7 @@ function renderPlaylistItemsList(items) {
     return;
   }
   list.innerHTML = items.map(it => `
-    <div class="pl-item" data-plitemid="${it.playlist_item_id}" data-vid="${it.video_id}" data-title="${escapeHtml(it.title)}" data-channel="${escapeHtml(it.channel || '')}" data-channel-url="${escapeHtml(it.channel_url || '')}" data-channel-id="${escapeHtml(it.channel_id || '')}">
+    <div class="pl-item" data-plitemid="${it.playlist_item_id}" data-vid="${it.video_id}" data-title="${escapeHtml(it.title)}" data-channel="${escapeHtml(it.channel || '')}" data-channel-url="${escapeHtml(it.channel_url || '')}" data-channel-id="${escapeHtml(it.channel_id || '')}" data-published="${escapeHtml(it.published_at || '')}">
       <input type="checkbox" class="vid-check" title="勾選">
       <span class="pl-item-title">${escapeHtml(it.title)}${it.channel ? ` <span class="pl-item-channel">· ${escapeHtml(it.channel)}</span>` : ''}</span>
     </div>`).join('');
@@ -2256,6 +2368,7 @@ function renderPlaylistItemsList(items) {
       channel: row.dataset.channel,
       channel_url: row.dataset.channelUrl,
       channel_id: row.dataset.channelId,
+      published_at: row.dataset.published,
     };
     row.querySelector('.pl-item-title').addEventListener('click', () => selectVideo(videoObj));
     const channelSpan = row.querySelector('.pl-item-channel');

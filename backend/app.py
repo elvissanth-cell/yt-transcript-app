@@ -735,7 +735,7 @@ def api_playlist_items():
         page_token = None
         while len(items) < limit:
             resp = youtube.playlistItems().list(
-                part="snippet", playlistId=playlist_id, maxResults=50, pageToken=page_token
+                part="snippet,contentDetails", playlistId=playlist_id, maxResults=50, pageToken=page_token
             ).execute()
             for item in resp.get("items", []):
                 sn = item["snippet"]
@@ -751,6 +751,8 @@ def api_playlist_items():
                         "channel": sn.get("videoOwnerChannelTitle"),  # 影片實際所屬頻道(不是播放清單擁有者)
                         "channel_id": ch_id,
                         "channel_url": f"https://www.youtube.com/channel/{ch_id}" if ch_id else None,
+                        # 影片本身的發佈時間(不是「加入播放清單」的時間),沒有的話退回加入時間
+                        "published_at": item.get("contentDetails", {}).get("videoPublishedAt") or sn.get("publishedAt"),
                         "position": sn.get("position"),
                     }
                 )
