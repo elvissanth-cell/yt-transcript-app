@@ -386,7 +386,28 @@ def _debug_secret():
     })
 
 
-def _load_json_file(path, default):
+JSONBIN_API_KEY = os.environ.get("JSONBIN_API_KEY", "")
+JSONBIN_CATEGORIES_ID = os.environ.get("JSONBIN_CATEGORIES_ID", "")
+JSONBIN_FAVORITES_ID = os.environ.get("JSONBIN_FAVORITES_ID", "")
+
+
+def _load_json_file(path, default, bin_id=None):
+    """
+    優先從JSONBin.io(免費雲端JSON儲存)讀取,因為Render免費方案的檔案系統是暫存的,
+    每次重新部署/重啟都會被清空,本機檔案只能當作JSONBin連不上時的緊急備援。
+    """
+    if bin_id and JSONBIN_API_KEY:
+        try:
+            import requests
+            resp = requests.get(
+                f"https://api.jsonbin.io/v3/b/{bin_id}/latest",
+                headers={"X-Master-Key": JSONBIN_API_KEY},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            return resp.json().get("record", default)
+        except Exception:
+            traceback.print_exc()  # 讀取失敗就往下退回本機檔案,不讓整個功能掛掉
     if not os.path.exists(path):
         return default
     try:
@@ -396,7 +417,20 @@ def _load_json_file(path, default):
         return default
 
 
-def _save_json_file(path, data):
+def _save_json_file(path, data, bin_id=None):
+    if bin_id and JSONBIN_API_KEY:
+        try:
+            import requests
+            resp = requests.put(
+                f"https://api.jsonbin.io/v3/b/{bin_id}",
+                headers={"X-Master-Key": JSONBIN_API_KEY, "Content-Type": "application/json"},
+                json=data,
+                timeout=8,
+            )
+            resp.raise_for_status()
+            return
+        except Exception:
+            traceback.print_exc()  # 雲端寫入失敗仍寫一份本機檔案,至少這次執行期間資料不會憑空消失
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -404,7 +438,7 @@ def _save_json_file(path, data):
 @app.route("/api/categories", methods=["GET"])
 def api_get_categories():
     """讀取頻道分類(格式: {頻道ID: [分類名,...]}),存在伺服器上,所有裝置共用同一份"""
-    return jsonify({"categories": _load_json_file(CATEGORIES_FILE, {})})
+    return jsonify({"categories": _load_json_file(CATEGORIES_FILE, {}, JSONBIN_CATEGORIES_ID)})
 
 
 @app.route("/api/categories", methods=["POST"])
@@ -412,14 +446,14 @@ def api_save_categories():
     """整包覆蓋儲存頻道分類"""
     data = request.json or {}
     categories = data.get("categories", {})
-    _save_json_file(CATEGORIES_FILE, categories)
+    _save_json_file(CATEGORIES_FILE, categories, JSONBIN_CATEGORIES_ID)
     return jsonify({"status": "ok"})
 
 
 @app.route("/api/favorites", methods=["GET"])
 def api_get_favorites():
     """讀取「我的最愛」篩選組合,存在伺服器上,所有裝置共用同一份"""
-    return jsonify({"favorites": _load_json_file(FAVORITES_FILE, [])})
+    return jsonify({"favorites": _load_json_file(FAVORITES_FILE, [], JSONBIN_FAVORITES_ID)})
 
 
 @app.route("/api/favorites", methods=["POST"])
@@ -427,19 +461,21 @@ def api_save_favorites():
     """整包覆蓋儲存「我的最愛」篩選組合"""
     data = request.json or {}
     favorites = data.get("favorites", [])
-    _save_json_file(FAVORITES_FILE, favorites)
+    _save_json_file(FAVORITES_FILE, favorites, JSONBIN_FAVORITES_ID)
     return jsonify({"status": "ok"})
 
 
+JSONBIN_TOKEN_ID = os.environ.get("JSONBIN_TOKEN_ID", "")
+
+
 def _load_google_credentials():
-    """讀取本機保存的Google憑證,過期會自動用refresh_token換新,並存回檔案"""
-    if not os.path.exists(TOKEN_FILE):
+    """讀取保存的Google憑證(優先從JSONBin雲端讀,本機檔案僅供備援),過期會自動用refresh_token換新並存回"""
+    data = _load_json_file(TOKEN_FILE, None, JSONBIN_TOKEN_ID)
+    if not data:
         return None
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request as GoogleAuthRequest
 
-    with open(TOKEN_FILE) as f:
-        data = json.load(f)
     creds = Credentials.from_authorized_user_info(data, YT_READONLY_SCOPES)
     if creds and creds.expired and creds.refresh_token:
         try:
@@ -451,8 +487,7 @@ def _load_google_credentials():
 
 
 def _save_google_credentials(creds):
-    with open(TOKEN_FILE, "w") as f:
-        f.write(creds.to_json())
+    _save_json_file(TOKEN_FILE, json.loads(creds.to_json()), JSONBIN_TOKEN_ID)
 
 
 @app.route("/auth/status", methods=["GET"])
