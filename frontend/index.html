@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>逐字稿站 · YouTube 研究工具</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F1115">
+<style>
+  :root{
+    --bg:#0F1115;
+    --surface:#171A21;
+    --surface-2:#1F232C;
+    --line:#2A2F3A;
+    --text:#E7E5E0;
+    --muted:#8B8F98;
+    --accent:#E8A33D;
+    --accent-dim:#8A6323;
+    --mint:#6EE7B7;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .slate{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:22px 28px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .slate .clap{
+    width:34px;height:34px;border-radius:6px;
+    background:repeating-linear-gradient(115deg, var(--accent), var(--accent) 6px, #0F1115 6px, #0F1115 12px);
+    border:2px solid var(--accent);
+    flex-shrink:0;
+  }
+  .slate h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:.3px;
+    margin:0;
+  }
+  .slate .tag{
+    color:var(--muted);
+    font-size:12px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    margin-left:auto;
+  }
+
+  .search-bar{
+    display:flex;
+    gap:10px;
+    padding:20px 28px;
+    max-width:900px;
+    margin:0 auto;
+  }
+  .search-bar input{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:13px 16px;
+    border-radius:var(--radius);
+    font-size:15px;
+    outline:none;
+  }
+  .search-bar input:focus{border-color:var(--accent);}
+  .btn{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:0 18px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    font-size:14px;
+    display:flex;align-items:center;gap:6px;
+    transition:border-color .15s;
+  }
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent);color:#191305;border-color:var(--accent);font-weight:600;}
+  .btn.mic.listening{border-color:#e05252;color:#e05252;animation:pulse 1s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.5;}100%{opacity:1;}}
+
+  .container{max-width:1000px;margin:0 auto;padding:0 28px 60px;}
+
+  .results{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:14px;
+    margin-top:6px;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    cursor:pointer;
+    transition:transform .12s, border-color .12s;
+  }
+  .card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .card img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;background:#000;}
+  .card .info{padding:10px 12px 14px;}
+  .card .title{font-size:13.5px;line-height:1.4;font-weight:600;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .card .channel{font-size:12px;color:var(--muted);margin-top:6px;}
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-top:22px;
+    overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;gap:10px;
+    padding:14px 18px;border-bottom:1px solid var(--line);
+    background:var(--surface-2);
+  }
+  .panel-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+  .panel-head h2{font-size:14px;margin:0;flex:1;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
+  .panel-body{max-height:420px;overflow-y:auto;padding:16px 18px;font-size:14px;line-height:1.75;}
+  .seg{display:flex;gap:12px;margin-bottom:6px;}
+  .seg .ts{color:var(--accent);font-variant-numeric:tabular-nums;font-size:12px;flex-shrink:0;width:52px;}
+  .comment{padding:10px 0;border-bottom:1px solid var(--line);}
+  .comment:last-child{border-bottom:none;}
+  .comment .author{color:var(--mint);font-size:12.5px;font-weight:600;}
+  .comment .votes{color:var(--muted);font-size:11.5px;margin-left:8px;}
+  .comment .ctext{margin-top:4px;}
+  .empty,.loading,.err{color:var(--muted);font-size:13.5px;padding:6px 0;}
+  .err{color:#e08888;}
+  .now-playing{font-size:13px;color:var(--muted);margin:20px 0 0;}
+  .now-playing b{color:var(--text);}
+</style>
+</head>
+<body>
+
+<div class="slate">
+  <div class="clap"></div>
+  <h1>逐字稿站</h1>
+  <span class="tag">Transcript &amp; Comment Desk</span>
+</div>
+
+<div class="search-bar">
+  <input id="q" type="text" placeholder="輸入關鍵字，或按麥克風語音輸入…" />
+  <button class="btn mic" id="micBtn" title="語音輸入">🎙️</button>
+  <button class="btn primary" id="searchBtn">搜尋</button>
+</div>
+
+<div class="container">
+  <div id="results" class="results"></div>
+  <div id="nowPlaying" class="now-playing" style="display:none"></div>
+
+  <div class="panel" id="transcriptPanel" style="display:none">
+    <div class="panel-head">
+      <span class="dot"></span>
+      <h2>逐字稿</h2>
+      <button class="btn" id="copyTranscript">一鍵複製</button>
+    </div>
+    <div class="panel-body" id="transcriptBody"><div class="empty">尚未選取影片</div></div>
+  </div>
+
+  <div class="panel" id="commentsPanel" style="display:none">
+    <div class="panel-head">
+      <span class="dot" style="background:var(--mint)"></span>
+      <h2>留言</h2>
+      <button class="btn" id="copyComments">一鍵複製</button>
+    </div>
+    <div class="panel-body" id="commentsBody"><div class="empty">尚未選取影片</div></div>
+  </div>
+</div>
+
+<script>
+// ====== 設定：後端 API 位址 ======
+// 本機執行 Flask 後端時預設是這個位址；若你把後端部署到雲端，改成雲端網址即可。
+const API_BASE = "http://127.0.0.1:5001";
+
+const els = {
+  q: document.getElementById('q'),
+  micBtn: document.getElementById('micBtn'),
+  searchBtn: document.getElementById('searchBtn'),
+  results: document.getElementById('results'),
+  nowPlaying: document.getElementById('nowPlaying'),
+  transcriptPanel: document.getElementById('transcriptPanel'),
+  transcriptBody: document.getElementById('transcriptBody'),
+  commentsPanel: document.getElementById('commentsPanel'),
+  commentsBody: document.getElementById('commentsBody'),
+  copyTranscript: document.getElementById('copyTranscript'),
+  copyComments: document.getElementById('copyComments'),
+};
+
+let lastTranscriptText = "";
+let lastCommentsText = "";
+
+// ---------- 語音輸入 ----------
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  const rec = new SpeechRecognition();
+  rec.lang = 'zh-TW';
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  els.micBtn.addEventListener('click', () => {
+    els.micBtn.classList.add('listening');
+    rec.start();
+  });
+  rec.onresult = (e) => {
+    els.q.value = e.results[0][0].transcript;
+    els.micBtn.classList.remove('listening');
+    doSearch();
+  };
+  rec.onerror = () => els.micBtn.classList.remove('listening');
+  rec.onend = () => els.micBtn.classList.remove('listening');
+} else {
+  els.micBtn.title = "此瀏覽器不支援語音輸入";
+  els.micBtn.style.opacity = 0.4;
+}
+
+// ---------- 搜尋 ----------
+els.searchBtn.addEventListener('click', doSearch);
+els.q.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+async function doSearch() {
+  const query = els.q.value.trim();
+  if (!query) return;
+  els.results.innerHTML = '<div class="loading">搜尋中…</div>';
+  try {
+    const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&limit=12`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderResults(data.results);
+  } catch (err) {
+    els.results.innerHTML = `<div class="err">搜尋失敗：${err.message}（請確認後端 Flask 伺服器已啟動）</div>`;
+  }
+}
+
+function renderResults(list) {
+  if (!list || !list.length) {
+    els.results.innerHTML = '<div class="empty">沒有找到結果</div>';
+    return;
+  }
+  els.results.innerHTML = '';
+  list.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <img src="${v.thumbnail}" alt="">
+      <div class="info">
+        <div class="title">${escapeHtml(v.title)}</div>
+        <div class="channel">${escapeHtml(v.channel || '')}</div>
+      </div>`;
+    card.addEventListener('click', () => selectVideo(v));
+    els.results.appendChild(card);
+  });
+}
+
+// ---------- 選取影片 -> 抓逐字稿 + 留言 ----------
+async function selectVideo(v) {
+  els.nowPlaying.style.display = 'block';
+  els.nowPlaying.innerHTML = `正在載入：<b>${escapeHtml(v.title)}</b>`;
+  els.transcriptPanel.style.display = 'block';
+  els.commentsPanel.style.display = 'block';
+  els.transcriptBody.innerHTML = '<div class="loading">逐字稿擷取中…</div>';
+  els.commentsBody.innerHTML = '<div class="loading">留言擷取中…</div>';
+
+  loadTranscript(v.video_id);
+  loadComments(v.video_id);
+}
+
+async function loadTranscript(videoId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/transcript?video=${videoId}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    lastTranscriptText = data.full_text;
+    els.transcriptBody.innerHTML = data.segments.map(s => `
+      <div class="seg">
+        <span class="ts">${formatTime(s.start)}</span>
+        <span>${escapeHtml(s.text)}</span>
+      </div>`).join('');
+  } catch (err) {
+    els.transcriptBody.innerHTML = `<div class="err">${err.message}</div>`;
+    lastTranscriptText = "";
+  }
+}
+
+async function loadComments(videoId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/comments?video=${videoId}&limit=50`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    lastCommentsText = data.comments.map(c => `${c.author}: ${c.text}`).join('\n\n');
+    els.commentsBody.innerHTML = data.comments.map(c => `
+      <div class="comment">
+        <span class="author">${escapeHtml(c.author || '匿名')}</span>
+        <span class="votes">👍 ${c.votes ?? 0}</span>
+        <div class="ctext">${escapeHtml(c.text)}</div>
+      </div>`).join('') || '<div class="empty">沒有留言</div>';
+  } catch (err) {
+    els.commentsBody.innerHTML = `<div class="err">${err.message}</div>`;
+    lastCommentsText = "";
+  }
+}
+
+// ---------- 一鍵複製 ----------
+els.copyTranscript.addEventListener('click', () => copyToClipboard(lastTranscriptText, els.copyTranscript));
+els.copyComments.addEventListener('click', () => copyToClipboard(lastCommentsText, els.copyComments));
+
+function copyToClipboard(text, btn) {
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '已複製 ✓';
+    setTimeout(() => btn.textContent = old, 1200);
+  });
+}
+
+function formatTime(sec) {
+  sec = Math.floor(sec);
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = (sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+function escapeHtml(str) {
+  return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- PWA Service Worker 註冊 ----------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

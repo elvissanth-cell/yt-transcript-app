@@ -1,0 +1,16 @@
+{
+  "name": "逐字稿站 - YouTube 研究工具",
+  "short_name": "逐字稿站",
+  "description": "語音/文字搜尋 YouTube 影片，自動擷取逐字稿與留言",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0F1115",
+  "theme_color": "#0F1115",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

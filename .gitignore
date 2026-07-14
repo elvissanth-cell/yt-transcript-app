@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+backend/client_secret.json
+backend/token.json
+backend/categories.json
+backend/favorites.json
