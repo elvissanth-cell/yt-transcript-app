@@ -174,12 +174,44 @@
     box-shadow:0 6px 24px rgba(0,0,0,.65);border-radius:10px;
   }
   .mini-expand{
-    display:none;position:absolute;top:6px;right:6px;z-index:3;
+    display:none;position:absolute;top:6px;right:6px;z-index:4;
     width:30px;height:30px;border-radius:8px;border:none;cursor:pointer;
     background:rgba(0,0,0,.65);color:#fff;font-size:15px;
     align-items:center;justify-content:center;
   }
   .player-wrap.mini .mini-expand{display:flex;}
+  .player-wrap.mini .player-gesture-overlay,
+  .player-wrap.mini .player-side-btn,
+  .player-wrap.mini .player-loop-btn{ display:none; }
+
+  /* ---- 雙擊快進/回退手勢層 ---- */
+  .player-gesture-overlay{
+    position:absolute;inset:0;display:flex;z-index:2;
+  }
+  .pgo-zone{flex:1;position:relative;}
+  .pgo-flash{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.8);
+    background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:500;
+    padding:8px 12px;border-radius:20px;opacity:0;pointer-events:none;
+    transition:opacity .15s,transform .15s;
+  }
+  .pgo-flash.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+
+  /* ---- 上一部/下一部/循環播放按鈕 ---- */
+  .player-side-btn{
+    position:absolute;top:50%;transform:translateY(-50%);z-index:3;
+    width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;
+    background:rgba(0,0,0,.45);color:#fff;font-size:18px;line-height:1;
+  }
+  .player-side-btn.left{left:8px;}
+  .player-side-btn.right{right:8px;}
+  .player-side-btn:disabled{opacity:.3;cursor:default;}
+  .player-loop-btn{
+    position:absolute;top:8px;right:8px;z-index:3;
+    width:28px;height:28px;border-radius:8px;border:none;cursor:pointer;
+    background:rgba(0,0,0,.45);color:#8B8F98;font-size:14px;
+  }
+  .player-loop-btn.active{color:var(--accent);background:rgba(0,0,0,.7);}
   .card .channel{cursor:pointer;}
   .card .channel:hover{color:var(--accent);text-decoration:underline;}
 
@@ -449,13 +481,20 @@
     padding:7px 8px;font-size:12.5px;border-radius:6px;cursor:pointer;
   }
   .video-info-bar .vib-pl-menu button:hover{background:var(--line);}
+  #playlistsBrowseList{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  }
   .pl-browse-item{
     padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;
-    border:1px solid var(--line);margin-bottom:8px;background:var(--surface);
+    border:1px solid var(--line);background:var(--surface);
+    overflow:hidden;
   }
   .pl-browse-item:hover{border-color:var(--accent);}
   .pl-browse-item.active{border-color:var(--accent);background:var(--accent-dim);}
-  .pl-browse-item .pl-browse-count{color:var(--muted);font-size:11.5px;margin-top:3px;}
+  .pl-browse-item .pl-browse-title{
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .pl-browse-item .pl-browse-count{color:var(--muted);font-size:11.5px;}
   .customfeed-input-row{display:flex;gap:6px;margin-bottom:12px;}
   .customfeed-input-row input{
     flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);
@@ -492,7 +531,7 @@
     /* ---- 頂部精簡:拿掉純裝飾的Logo/標語,登入按鈕獨立不再跟捲動按鈕疊在一起 ---- */
     .slate .clap, .slate h1, .slate .tag{ display:none; }
     .slate{ padding:10px 14px; justify-content:flex-end; }
-    .scroll-nav-fixed{ display:none; } /* 切分頁會自動捲回頂部,手機上不再需要這組按鈕,順便解決跟登出按鈕重疊的問題 */
+    .scroll-nav-fixed{ top:8px; } /* 手機上維持顯示,只是稍微往上貼齊,跟登入按鈕已經分居左右不會再重疊 */
 
     /* ---- 播放器+資訊列黏在畫面最上方,切換分頁或往下捲動逐字稿/留言都不會被捲走 ---- */
     #playerPinned{
@@ -521,7 +560,7 @@
 
   /* ---- 固定在畫面上方的回頂端/回底端按鈕(桌機+手機都有,全螢幕看影片時自動隱藏) ---- */
   .scroll-nav-fixed{
-    position:fixed;top:10px;right:14px;z-index:999;
+    position:fixed;top:10px;left:14px;z-index:999;
     display:flex;gap:6px;
   }
   .scroll-nav-fixed button{
@@ -537,7 +576,6 @@
 
 <div class="scroll-nav-fixed" id="scrollNavFixed">
   <button id="scrollTopBtn" title="回到頂端">⬆</button>
-  <button id="scrollBottomBtn" title="回到底端">⬇</button>
 </div>
 
 <div class="slate">
@@ -686,10 +724,13 @@
       <div id="playerWrap" class="player-wrap" style="display:none">
         <button class="mini-expand" id="miniExpandBtn" title="回到完整播放器">⤢</button>
         <div id="ytPlayer"></div>
-      </div>
-      <div class="kb-hint" id="kbHint">
-        💡 播放中用 <b>Shift + .</b> 加速、<b>Shift + ,</b> 減速（不用點進畫面，網頁上按就有效）
-        <span id="rateIndicator" style="display:none;margin-left:8px;color:var(--accent);font-weight:600;"></span>
+        <div id="playerGestureOverlay" class="player-gesture-overlay">
+          <div class="pgo-zone" data-seek="-5"><span class="pgo-flash" id="pgoFlashBack">«5</span></div>
+          <div class="pgo-zone" data-seek="5"><span class="pgo-flash" id="pgoFlashFwd">5»</span></div>
+        </div>
+        <button class="player-side-btn left" id="prevVideoBtn" title="上一部">‹</button>
+        <button class="player-side-btn right" id="nextVideoBtn" title="下一部">›</button>
+        <button class="player-loop-btn" id="loopToggleBtn" title="循環播放此影片">🔁</button>
       </div>
       <div class="video-info-bar" id="videoInfoBar" style="display:none"></div>
     </div>
@@ -1931,6 +1972,9 @@ async function selectVideo(v, opts = {}) {
   playerWrap.style.display = 'block';
   playerWrap.classList.remove('mini'); // 點選新影片時一律回到完整播放器
   mobileNavMini = false;
+  loopCurrentVideo = false;
+  document.getElementById('loopToggleBtn')?.classList.remove('active');
+  updateQueueNavButtons();
   window.scrollTo({ top: 0, behavior: 'smooth' }); // 不管在哪一頁點影片,都捲回頂部看播放器
 
   renderVideoInfoBar(v);
@@ -1965,14 +2009,21 @@ async function selectVideo(v, opts = {}) {
         },
         onStateChange: (e) => {
           updateMiniPlayer(); // 播放/暫停狀態改變時立即重算要不要子母畫面
-          if (e.data === YT.PlayerState.ENDED && genericQueueList.length) {
-            genericQueueIndex++;
-            if (genericQueueIndex < genericQueueList.length) {
-              selectVideo(genericQueueList[genericQueueIndex], { fromQueue: true });
-            } else {
-              genericQueueList = [];
-              genericQueueIndex = 0;
-              renderQueuePanel();
+          if (e.data === YT.PlayerState.ENDED) {
+            if (loopCurrentVideo) {
+              mainPlayer.seekTo(0, true);
+              mainPlayer.playVideo();
+              return;
+            }
+            if (genericQueueList.length) {
+              genericQueueIndex++;
+              if (genericQueueIndex < genericQueueList.length) {
+                selectVideo(genericQueueList[genericQueueIndex], { fromQueue: true });
+              } else {
+                genericQueueList = [];
+                genericQueueIndex = 0;
+                renderQueuePanel();
+              }
             }
           }
         },
@@ -1993,6 +2044,7 @@ function renderVideoInfoBar(v) {
     <div class="vib-title">${escapeHtml(v.title || '')}</div>
     ${v.channel ? `<span class="vib-channel">${escapeHtml(v.channel)}</span>` : ''}
     ${dateStr ? `<span class="vib-date">· ${escapeHtml(dateStr)}</span>` : ''}
+    <span id="rateIndicator" class="vib-date" style="display:none;color:var(--accent);font-weight:500;"></span>
     <div class="vib-actions">
       ${channelId ? `<button class="btn vib-sub-btn" id="vibSubBtn">…</button>` : ''}
       <button class="btn vib-copylink-btn" id="vibCopyLinkBtn">🔗 複製連結</button>
@@ -2187,6 +2239,67 @@ document.getElementById('playerWrap').addEventListener('click', () => {
   if (document.getElementById('playerWrap').classList.contains('mini')) restoreMobileDetailPanels();
 });
 
+// ---------- 上一部/下一部/循環播放 ----------
+let loopCurrentVideo = false;
+
+function updateQueueNavButtons() {
+  const prevBtn = document.getElementById('prevVideoBtn');
+  const nextBtn = document.getElementById('nextVideoBtn');
+  if (!prevBtn || !nextBtn) return;
+  const inQueue = genericQueueList.length > 0;
+  prevBtn.disabled = !inQueue || genericQueueIndex <= 0;
+  nextBtn.disabled = !inQueue || genericQueueIndex >= genericQueueList.length - 1;
+}
+
+document.getElementById('prevVideoBtn').addEventListener('click', () => {
+  if (genericQueueIndex > 0) {
+    genericQueueIndex--;
+    selectVideo(genericQueueList[genericQueueIndex], { fromQueue: true });
+  }
+});
+document.getElementById('nextVideoBtn').addEventListener('click', () => {
+  if (genericQueueIndex < genericQueueList.length - 1) {
+    genericQueueIndex++;
+    selectVideo(genericQueueList[genericQueueIndex], { fromQueue: true });
+  }
+});
+document.getElementById('loopToggleBtn').addEventListener('click', () => {
+  loopCurrentVideo = !loopCurrentVideo;
+  document.getElementById('loopToggleBtn').classList.toggle('active', loopCurrentVideo);
+});
+
+// ---------- 雙擊快進/回退手勢(單擊=播放/暫停,雙擊=±5秒) ----------
+(() => {
+  const DOUBLE_TAP_MS = 300;
+  document.querySelectorAll('.pgo-zone').forEach(zone => {
+    let tapTimer = null;
+    let tapCount = 0;
+    zone.addEventListener('click', () => {
+      if (!mainPlayer) return;
+      tapCount++;
+      if (tapCount === 1) {
+        tapTimer = setTimeout(() => {
+          tapCount = 0;
+          // 單擊:播放/暫停切換
+          const state = mainPlayer.getPlayerState();
+          if (state === YT.PlayerState.PLAYING) mainPlayer.pauseVideo();
+          else mainPlayer.playVideo();
+        }, DOUBLE_TAP_MS);
+      } else {
+        clearTimeout(tapTimer);
+        tapCount = 0;
+        // 雙擊:快進/回退5秒,並顯示提示動畫
+        const delta = Number(zone.dataset.seek);
+        const current = mainPlayer.getCurrentTime();
+        mainPlayer.seekTo(Math.max(0, current + delta), true);
+        const flash = zone.querySelector('.pgo-flash');
+        flash.classList.add('show');
+        setTimeout(() => flash.classList.remove('show'), 400);
+      }
+    });
+  });
+})();
+
 function updateRateIndicator() {
   const el = document.getElementById('rateIndicator');
   if (!el) return;
@@ -2194,7 +2307,7 @@ function updateRateIndicator() {
     el.style.display = 'none';
   } else {
     el.style.display = 'inline';
-    el.textContent = `播放速度 ${currentPlaybackRate}x`;
+    el.textContent = `${currentPlaybackRate}x`;
   }
 }
 
@@ -2342,8 +2455,7 @@ function renderPlaylistsBrowseList() {
   }
   container.innerHTML = userPlaylists.map(p => `
     <div class="pl-browse-item ${p.playlist_id === currentPlaylistId ? 'active' : ''}" data-pid="${p.playlist_id}">
-      <div>${escapeHtml(p.title)}</div>
-      <div class="pl-browse-count">${p.video_count ?? 0} 部影片</div>
+      <div class="pl-browse-title">${escapeHtml(p.title)} <span class="pl-browse-count">(${p.video_count ?? 0})</span></div>
     </div>`).join('');
   container.querySelectorAll('.pl-browse-item').forEach(el => {
     el.addEventListener('click', () => openPlaylist(el.dataset.pid));
