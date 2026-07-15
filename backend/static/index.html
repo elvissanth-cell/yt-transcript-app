@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>逐字稿站 · YouTube 研究工具</title>
 <link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
 <meta name="theme-color" content="#0F1115">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192">
@@ -306,27 +307,37 @@
   .subs-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
   .subs-toolbar h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:0;}
 
-  /* ---- 分類群組 ---- */
-  .category-group{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    margin-bottom:10px;overflow:hidden;
+  /* ---- 分類群組(緊湊雙欄格,與播放清單資料夾一致的風格) ---- */
+  .category-groups{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;
   }
+  .category-group{
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    overflow:hidden;
+  }
+  .category-group:has(.category-header.all-selected){border-color:var(--accent);}
+  .category-group:has(.category-header.some-selected){border-color:var(--accent-dim);}
+  .category-group:has(.category-body:not(.collapsed)){grid-column:1 / -1;} /* 展開頻道清單時,該分類暫時佔滿整排寬度 */
   .category-header{
-    display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;
+    display:flex;align-items:center;gap:7px;padding:8px 10px;cursor:pointer;
     background:var(--surface-2);
   }
   .category-header:hover{background:#242832;}
   .category-header .cat-check{
-    width:16px;height:16px;border-radius:4px;border:1.5px solid var(--muted);flex-shrink:0;
+    width:14px;height:14px;border-radius:4px;border:1.5px solid var(--muted);flex-shrink:0;
   }
   .category-header.all-selected .cat-check{background:var(--accent);border-color:var(--accent);}
   .category-header.some-selected .cat-check{background:var(--accent-dim);border-color:var(--accent);}
-  .category-header .cat-name{font-weight:600;font-size:13.5px;flex:1;}
-  .category-header .cat-count{color:var(--muted);font-size:12px;}
-  .category-header .cat-arrow{color:var(--muted);font-size:11px;transition:transform .15s;}
+  .category-header .cat-name{
+    font-weight:600;font-size:12.5px;flex:1;min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .category-header.all-selected .cat-name{color:var(--accent);}
+  .category-header .cat-count{color:var(--muted);font-size:11px;flex-shrink:0;}
+  .category-header .cat-arrow{color:var(--muted);font-size:11px;transition:transform .15s;flex-shrink:0;}
   .category-header .cat-arrow.open{transform:rotate(90deg);}
   .category-body{
-    display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;
+    display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
     border-top:1px solid var(--line);
   }
   .category-body.collapsed{display:none;}
@@ -563,7 +574,8 @@
 <body>
 
 <div class="scroll-nav-fixed" id="scrollNavFixed">
-  <button id="scrollTopBtn" title="回到頂端">⬆</button>
+  <button id="scrollTopBtn" title="回到頂端"><i class="ti ti-arrow-bar-to-up"></i></button>
+  <button id="scrollBottomBtn" title="回到底端"><i class="ti ti-arrow-bar-to-down"></i></button>
 </div>
 
 <div class="slate">
@@ -579,6 +591,7 @@
 <div class="app-shell" id="appShell">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-pinned">
+      <div id="searchTools">
       <div class="search-row">
         <input id="q" type="text" placeholder="輸入關鍵字，或按麥克風語音輸入…" />
         <button class="btn mic" id="micBtn" title="語音輸入">🎙️</button>
@@ -605,15 +618,16 @@
           <option value="views">觀看數</option>
         </select>
       </div>
+      </div>
       <div id="favoritesBar" class="favorites-bar" style="display:none"></div>
     </div>
 
     <nav class="sidebar-nav">
-      <button class="nav-btn active" data-nav="search"><span class="nav-icon">🔍</span><span class="nav-label">搜尋結果</span></button>
-      <button class="nav-btn" id="subsNavBtn" data-nav="subscriptions" style="display:none"><span class="nav-icon">📺</span><span class="nav-label">我的訂閱</span></button>
-      <button class="nav-btn" id="playlistsNavBtn" data-nav="playlists" style="display:none"><span class="nav-icon">🎞️</span><span class="nav-label">播放清單</span></button>
-      <button class="nav-btn" data-nav="customfeed"><span class="nav-icon">🧭</span><span class="nav-label">自訂動態</span></button>
-      <button class="nav-btn external" data-nav="home"><span class="nav-icon">🏠</span><span class="nav-label">YouTube 首頁推薦</span><span>↗</span></button>
+      <button class="nav-btn active" data-nav="search"><span class="nav-icon"><i class="ti ti-search"></i></span><span class="nav-label">搜尋結果</span></button>
+      <button class="nav-btn" id="subsNavBtn" data-nav="subscriptions" style="display:none"><span class="nav-icon"><i class="ti ti-user"></i></span><span class="nav-label">我的訂閱</span></button>
+      <button class="nav-btn" id="playlistsNavBtn" data-nav="playlists" style="display:none"><span class="nav-icon"><i class="ti ti-playlist"></i></span><span class="nav-label">播放清單</span></button>
+      <button class="nav-btn" data-nav="customfeed"><span class="nav-icon"><i class="ti ti-compass"></i></span><span class="nav-label">自訂動態</span></button>
+      <button class="nav-btn external" data-nav="home"><span class="nav-icon"><i class="ti ti-home"></i></span><span class="nav-label">YouTube 首頁推薦</span><span>↗</span></button>
     </nav>
   </aside>
 
@@ -878,6 +892,12 @@ function switchSidebarView(view) {
   const idMap = { search: 'searchView', subscriptions: 'subsView', playlists: 'playlistsView', customfeed: 'customfeedView', home: 'homeView' };
   const target = document.getElementById(idMap[view]);
   if (target) target.style.display = 'block';
+  // 三區塊條件顯示:搜尋框只在搜尋分頁出現,我的最愛只在訂閱分頁出現,其他分頁兩者都收起
+  const searchTools = document.getElementById('searchTools');
+  if (searchTools) searchTools.style.display = view === 'search' ? 'block' : 'none';
+  if (els.favoritesBar) {
+    els.favoritesBar.style.display = (view === 'subscriptions' && loadFavorites().length) ? 'flex' : 'none';
+  }
   // 手機上是整頁捲動(不是centerContent內部捲動),切換頁籤時捲回頂部,避免看起來像「舊內容還在上面」
   window.scrollTo(0, 0);
   const centerEl = document.getElementById('centerContent');
@@ -1696,7 +1716,7 @@ function renderCategoryGroups() {
         <div class="category-header ${state}">
           <span class="cat-check"></span>
           <span class="cat-name">${escapeHtml(name)}</span>
-          <span class="cat-count">${channels.length}個頻道</span>
+          <span class="cat-count">(${channels.length})</span>
           <span class="cat-arrow">▸</span>
         </div>
         <div class="category-body collapsed">
@@ -1916,7 +1936,9 @@ els.saveFavoriteBtn.addEventListener('click', () => {
 function renderFavoritesBar() {
   const favorites = loadFavorites();
   if (!favorites.length) { els.favoritesBar.style.display = 'none'; return; }
-  els.favoritesBar.style.display = 'flex';
+  // 只在「我的訂閱」分頁顯示我的最愛列,其他分頁一律收起(內容仍照常渲染,切回訂閱分頁時立即可見)
+  const onSubsView = document.getElementById('subsView')?.style.display !== 'none';
+  els.favoritesBar.style.display = onSubsView ? 'flex' : 'none';
   els.favoritesBar.innerHTML = favorites.map((f, idx) => `
     <div class="fav-pill" data-idx="${idx}">
       <span class="fav-name">⭐ ${escapeHtml(f.name || '(未命名)')}</span>

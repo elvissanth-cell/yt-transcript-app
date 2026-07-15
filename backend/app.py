@@ -976,7 +976,74 @@ def get_transcript():
         return jsonify({"error": "影片不存在或無法存取"}), 404
     except Exception as e:
         traceback.print_exc()
+        # ---- 備援路徑:youtube-transcript-api被IP封鎖時,改用yt-dlp偽裝成不同客戶端再試 ----
+        # YouTube對「網頁端」和「App端」的封鎖強度不同,有時網頁端被擋但Android/iOS端還放行
+        fallback = _transcript_via_ytdlp(video_id, lang_pref)
+        if fallback is not None:
+            return jsonify(fallback)
         return jsonify({"error": f"逐字稿擷取失敗: {str(e)}"}), 500
+
+
+def _transcript_via_ytdlp(video_id, lang_pref):
+    """用yt-dlp輪流偽裝成Android/iOS客戶端抓字幕,全部失敗回傳None"""
+    import urllib.request
+
+    for client in ["android", "ios"]:
+        try:
+            import yt_dlp
+
+            opts = {
+                "skip_download": True,
+                "writesubtitles": True,
+                "writeautomaticsub": True,
+                "quiet": True,
+                "no_warnings": True,
+                "extractor_args": {"youtube": {"player_client": [client]}},
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            subs = info.get("subtitles") or {}
+            auto = info.get("automatic_captions") or {}
+            merged = {**auto, **subs}  # 人工字幕優先於自動字幕
+            chosen_lang, tracks = None, None
+            for lang in lang_pref:
+                if lang in merged:
+                    chosen_lang, tracks = lang, merged[lang]
+                    break
+            if not tracks and merged:
+                chosen_lang, tracks = next(iter(merged.items()))
+            if not tracks:
+                continue
+            json3_url = next((t["url"] for t in tracks if t.get("ext") == "json3"), None)
+            if not json3_url:
+                json3_url = tracks[0]["url"] + "&fmt=json3"
+            with urllib.request.urlopen(json3_url, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            segments = []
+            for ev in data.get("events", []):
+                text = "".join(seg.get("utf8", "") for seg in ev.get("segs", [])).strip()
+                if not text:
+                    continue
+                segments.append({
+                    "start": (ev.get("tStartMs", 0)) / 1000.0,
+                    "duration": (ev.get("dDurationMs", 0)) / 1000.0,
+                    "text": text,
+                })
+            if not segments:
+                continue
+            return {
+                "video_id": video_id,
+                "language": chosen_lang,
+                "language_code": chosen_lang,
+                "is_generated": chosen_lang not in subs,
+                "segments": segments,
+                "full_text": "\n".join(s["text"] for s in segments),
+                "source": f"ytdlp_{client}",
+            }
+        except Exception:
+            traceback.print_exc()
+            continue
+    return None
 
 
 @app.route("/api/comments", methods=["GET"])
@@ -984,6 +1051,8 @@ def get_comments():
     """
     擷取影片留言
     query params: video=, limit=留言數(預設50), sort=0(熱門)/1(最新, 預設0)
+    策略:優先走YouTube官方API(不受雲端IP封鎖影響,但吃每日配額且需登入),
+    沒登入或官方API失敗時,退回youtube-comment-downloader爬蟲(免配額但可能被IP封鎖)。
     """
     raw = request.args.get("video", "").strip()
     if not raw:
@@ -992,6 +1061,44 @@ def get_comments():
     limit = int(request.args.get("limit", 50))
     sort_by = int(request.args.get("sort", 0))
 
+    # ---- 路徑1:官方YouTube Data API(已登入才可用) ----
+    creds = _load_google_credentials()
+    if creds:
+        try:
+            from googleapiclient.discovery import build
+
+            youtube = build("youtube", "v3", credentials=creds)
+            comments = []
+            page_token = None
+            order = "relevance" if sort_by == 0 else "time"
+            while len(comments) < limit:
+                resp = youtube.commentThreads().list(
+                    part="snippet",
+                    videoId=video_id,
+                    maxResults=min(100, limit - len(comments)),
+                    order=order,
+                    textFormat="plainText",
+                    pageToken=page_token,
+                ).execute()
+                for item in resp.get("items", []):
+                    sn = item["snippet"]["topLevelComment"]["snippet"]
+                    comments.append(
+                        {
+                            "author": sn.get("authorDisplayName"),
+                            "text": sn.get("textDisplay"),
+                            "votes": sn.get("likeCount"),
+                            "time": sn.get("publishedAt"),
+                            "reply": False,
+                        }
+                    )
+                page_token = resp.get("nextPageToken")
+                if not page_token:
+                    break
+            return jsonify({"video_id": video_id, "count": len(comments), "comments": comments, "source": "official_api"})
+        except Exception:
+            traceback.print_exc()  # 官方API失敗(如留言關閉/配額用盡),往下退回爬蟲路徑
+
+    # ---- 路徑2:youtube-comment-downloader爬蟲(未登入時的唯一路徑) ----
     try:
         from youtube_comment_downloader import YoutubeCommentDownloader, SORT_BY_POPULAR, SORT_BY_RECENT
 
@@ -1001,7 +1108,7 @@ def get_comments():
 
         comments = []
         last_err = None
-        for attempt in range(3):  # 同樣是YouTube IP限流的問題,重試幾次有機會繞過暫時性阻擋
+        for attempt in range(3):  # YouTube IP限流有時是暫時性的,重試幾次有機會繞過
             try:
                 for i, c in enumerate(downloader.get_comments_from_url(url, sort_by=sort_mode)):
                     if i >= limit:
@@ -1025,7 +1132,7 @@ def get_comments():
         if last_err is not None:
             raise last_err
 
-        return jsonify({"video_id": video_id, "count": len(comments), "comments": comments})
+        return jsonify({"video_id": video_id, "count": len(comments), "comments": comments, "source": "scraper"})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": f"留言擷取失敗: {str(e)}"}), 500
