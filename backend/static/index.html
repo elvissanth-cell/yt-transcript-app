@@ -453,18 +453,39 @@
   /* ---- 依序播放佇列(留言下方):可拖曳排序 ---- */
   .queue-row{
     display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;
-    border:1px solid var(--line);margin-bottom:6px;background:var(--surface);cursor:grab;
+    border:1px solid var(--line);margin-bottom:6px;background:var(--surface);
   }
   .queue-row.playing{border-color:var(--accent);background:var(--accent-dim);}
-  .queue-row.dragging{opacity:.4;}
-  .queue-row .queue-handle{color:var(--muted);flex-shrink:0;cursor:grab;user-select:none;}
   .queue-row .queue-idx{width:20px;flex-shrink:0;color:var(--muted);font-size:11.5px;text-align:right;}
   .queue-row .queue-title{flex:1;font-size:12.5px;line-height:1.4;cursor:pointer;}
+  .queue-row .queue-move{
+    flex-shrink:0;background:none;border:none;color:var(--text);cursor:pointer;
+    font-size:14px;width:26px;height:26px;border-radius:6px;
+  }
+  .queue-row .queue-move:hover{color:var(--accent);background:var(--line);}
+  .queue-row .queue-move:disabled{color:var(--line);cursor:default;background:none;}
   .queue-row .queue-remove{
     flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;
-    font-size:15px;width:24px;height:24px;border-radius:6px;
+    font-size:13px;width:24px;height:24px;border-radius:6px;
   }
   .queue-row .queue-remove:hover{color:#e08888;background:var(--line);}
+
+  /* ---- 圓形勾勾樣式(所有影片勾選框):未選=灰圈,選中=橘底黑勾 ---- */
+  input.vid-check{
+    appearance:none;-webkit-appearance:none;
+    width:18px;height:18px;border-radius:50%;
+    border:1.5px solid var(--muted);background:transparent;
+    cursor:pointer;position:relative;flex-shrink:0;margin:0;
+    transition:background .12s,border-color .12s;
+  }
+  input.vid-check:checked{
+    background:var(--accent);border-color:var(--accent);
+  }
+  input.vid-check:checked::after{
+    content:"✓";position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    color:#191305;font-size:12px;font-weight:700;line-height:1;
+  }
   .video-info-bar .vib-actions{display:flex;gap:8px;margin-left:auto;position:relative;}
   .video-info-bar .vib-sub-btn{font-size:12px;padding:0 12px;height:28px;}
   .video-info-bar .vib-sub-btn.subscribed{color:var(--muted);}
@@ -532,11 +553,17 @@
     .slate{ padding:10px 14px; justify-content:flex-end; }
     .scroll-nav-fixed{ top:8px; } /* 手機上維持顯示,只是稍微往上貼齊,跟登入按鈕已經分居左右不會再重疊 */
 
+    /* 頻道頁會隱藏整個.sidebar,但底部分頁列(.sidebar-nav是fixed定位)要例外保留,
+       不然進頻道頁後五個分頁按鈕會整排消失,使用者被困在頻道頁出不來 */
+    body.channel-mode .sidebar{ display:block !important; }
+    body.channel-mode .sidebar > .sidebar-pinned{ display:none; }
+
     /* ---- 播放器+資訊列黏在畫面最上方,切換分頁或往下捲動逐字稿/留言都不會被捲走 ---- */
     #playerPinned{
       position:sticky;top:0;z-index:60;background:var(--bg);
       padding-bottom:6px;border-bottom:1px solid var(--line);
     }
+    #playerPinned:has(.player-wrap.mini){ padding:0;border:none; } /* 子母畫面時,原本黏頂的容器已淨空,連框線也收掉避免頂部殘留一條空帶 */
 
     /* ---- 導覽從「頁面頂端、佔位又會被捲走的文字按鈕」改成「螢幕底部固定的圖示分頁列」 ---- */
     /* 只動 .sidebar-nav(那排搜尋結果/我的訂閱/播放清單...按鈕),搜尋框/篩選/我的最愛維持原位不動 */
@@ -555,6 +582,15 @@
     .nav-btn.active{ background:var(--accent-dim); }
     .nav-btn .nav-icon{ font-size:20px; }
     .nav-btn .nav-label, .nav-btn.external > span:last-child{ display:none; } /* 只留圖示,文字/外部連結符號在手機上收起 */
+
+    /* ---- 子母畫面小視窗:墊高到分頁列上方,不擋住底部按鈕 ---- */
+    .player-wrap.mini{
+      bottom: calc(64px + env(safe-area-inset-bottom));
+    }
+
+    /* ---- 頻道頁:桌機版會隱藏整個左側欄,但手機的分頁列住在左側欄裡,要例外保留 ---- */
+    body.channel-mode .sidebar{ display:block !important; }
+    body.channel-mode .sidebar-pinned{ display:none; } /* 搜尋框那塊在頻道頁仍收起,只留分頁列 */
   }
 
   /* ---- 固定在畫面上方的回頂端/回底端按鈕(桌機+手機都有,全螢幕看影片時自動隱藏) ---- */
@@ -745,7 +781,7 @@
         <span class="dot"></span>
         <h2>逐字稿</h2>
         <button class="btn" id="toggleTranscript">展開</button>
-        <button class="btn" id="copyTranscript">一鍵複製(含時間軸)</button>
+        <button class="btn" id="copyTranscript">一鍵複製</button>
       </div>
       <div class="panel-body collapsed" id="transcriptBody"><div class="empty">尚未選取影片</div></div>
     </div>
@@ -912,11 +948,11 @@ function forceMobileMiniOnNav() {
   if (!wrap || wrap.style.display === 'none') return;
   mobileNavMini = true;
   updateMiniPlayer();
-  [els.transcriptPanel, els.commentsPanel, els.queuePanel].forEach(p => { if (p) p.dataset.mobileHidden = p.style.display !== 'none' ? '1' : ''; if (p) p.style.display = 'none'; });
+  [els.transcriptPanel, els.commentsPanel, els.queuePanel, els.nowPlaying].forEach(p => { if (p) p.dataset.mobileHidden = p.style.display !== 'none' ? '1' : ''; if (p) p.style.display = 'none'; });
 }
 
 function restoreMobileDetailPanels() {
-  [els.transcriptPanel, els.commentsPanel, els.queuePanel].forEach(p => {
+  [els.transcriptPanel, els.commentsPanel, els.queuePanel, els.nowPlaying].forEach(p => {
     if (p && p.dataset.mobileHidden === '1') { p.style.display = 'block'; p.dataset.mobileHidden = ''; }
   });
   mobileNavMini = false;
@@ -1412,18 +1448,18 @@ function makeSelectionController(prefix) {
 }
 
 // ---------- 依序播放佇列面板(留言下方):顯示清單、可拖曳排序、可一鍵移出 ----------
-let queueDragFromIndex = null;
-
 function renderQueuePanel() {
   if (!els.queuePanel) return;
   if (!genericQueueList.length) { els.queuePanel.style.display = 'none'; return; }
   els.queuePanel.style.display = 'block';
+  const lastIdx = genericQueueList.length - 1;
   els.queueBody.innerHTML = genericQueueList.map((v, i) => `
-    <div class="queue-row ${i === genericQueueIndex ? 'playing' : ''}" draggable="true" data-idx="${i}">
-      <span class="queue-handle">⠿</span>
+    <div class="queue-row ${i === genericQueueIndex ? 'playing' : ''}" data-idx="${i}">
       <span class="queue-idx">${i + 1}</span>
       <span class="queue-title">${escapeHtml(v.title || '')}</span>
-      <button class="queue-remove" title="移出清單" data-idx="${i}">✕</button>
+      <button class="queue-move" data-dir="-1" data-idx="${i}" title="往上移" ${i === 0 ? 'disabled' : ''}><i class="ti ti-chevron-up"></i></button>
+      <button class="queue-move" data-dir="1" data-idx="${i}" title="往下移" ${i === lastIdx ? 'disabled' : ''}><i class="ti ti-chevron-down"></i></button>
+      <button class="queue-remove" title="移出清單" data-idx="${i}"><i class="ti ti-x"></i></button>
     </div>`).join('');
 
   els.queueBody.querySelectorAll('.queue-title').forEach(el => {
@@ -1443,26 +1479,23 @@ function renderQueuePanel() {
       else if (idx === genericQueueIndex) genericQueueIndex = Math.min(genericQueueIndex, genericQueueList.length - 1);
       if (!genericQueueList.length) { genericQueueIndex = 0; }
       renderQueuePanel();
+      updateQueueNavButtons();
     });
   });
 
-  els.queueBody.querySelectorAll('.queue-row').forEach(row => {
-    row.addEventListener('dragstart', () => {
-      queueDragFromIndex = Number(row.dataset.idx);
-      row.classList.add('dragging');
-    });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
-    row.addEventListener('dragover', (e) => e.preventDefault());
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const toIndex = Number(row.dataset.idx);
-      if (queueDragFromIndex === null || queueDragFromIndex === toIndex) return;
+  // 上/下移動按鈕(取代拖曳:HTML5拖放在手機觸控螢幕上不會觸發,按鈕才可靠)
+  els.queueBody.querySelectorAll('.queue-move').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      const dir = Number(btn.dataset.dir);
+      const target = idx + dir;
+      if (target < 0 || target >= genericQueueList.length) return;
       const wasPlayingItem = genericQueueList[genericQueueIndex];
-      const [moved] = genericQueueList.splice(queueDragFromIndex, 1);
-      genericQueueList.splice(toIndex, 0, moved);
-      genericQueueIndex = genericQueueList.indexOf(wasPlayingItem); // 拖曳後重新定位「目前正在播放」是哪一個
-      queueDragFromIndex = null;
+      [genericQueueList[idx], genericQueueList[target]] = [genericQueueList[target], genericQueueList[idx]];
+      genericQueueIndex = genericQueueList.indexOf(wasPlayingItem); // 移動後重新定位「目前正在播放」是哪一個
       renderQueuePanel();
+      updateQueueNavButtons();
     });
   });
 }

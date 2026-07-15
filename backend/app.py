@@ -436,6 +436,15 @@ def _save_json_file(path, data, bin_id=None):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+@app.route("/api/version", methods=["GET"])
+def api_version():
+    """部署驗證用:確認Render上實際跑的是哪一版程式碼"""
+    return jsonify({
+        "build": "2026-07-15-v2",
+        "features": ["official_api_comments", "ytdlp_transcript_fallback", "jsonbin_persistence"],
+    })
+
+
 @app.route("/api/categories", methods=["GET"])
 def api_get_categories():
     """讀取頻道分類(格式: {頻道ID: [分類名,...]}),存在伺服器上,所有裝置共用同一份"""
