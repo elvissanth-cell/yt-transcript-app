@@ -489,13 +489,18 @@
     /* 手機上頻道頁一樣維持「播放器在最上面、頻道內容在下面」上下堆疊,不要硬擠兩欄 */
     body.channel-mode .app-shell{ grid-template-columns:1fr; }
 
+    /* ---- 頂部精簡:拿掉純裝飾的Logo/標語,登入按鈕獨立不再跟捲動按鈕疊在一起 ---- */
+    .slate .clap, .slate h1, .slate .tag{ display:none; }
+    .slate{ padding:10px 14px; justify-content:flex-end; }
+    .scroll-nav-fixed{ display:none; } /* 切分頁會自動捲回頂部,手機上不再需要這組按鈕,順便解決跟登出按鈕重疊的問題 */
+
     /* ---- 播放器+資訊列黏在畫面最上方,切換分頁或往下捲動逐字稿/留言都不會被捲走 ---- */
     #playerPinned{
       position:sticky;top:0;z-index:60;background:var(--bg);
       padding-bottom:6px;border-bottom:1px solid var(--line);
     }
 
-    /* ---- 導覽從「頁面頂端、佔位又會被捲走的文字按鈕」改成「螢幕底部固定的分頁列」 ---- */
+    /* ---- 導覽從「頁面頂端、佔位又會被捲走的文字按鈕」改成「螢幕底部固定的圖示分頁列」 ---- */
     /* 只動 .sidebar-nav(那排搜尋結果/我的訂閱/播放清單...按鈕),搜尋框/篩選/我的最愛維持原位不動 */
     .sidebar-nav{
       position:fixed;left:0;right:0;bottom:0;z-index:100;
@@ -505,12 +510,13 @@
       overflow-x:auto;
     }
     .nav-btn{
-      flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;
-      padding:6px 2px;font-size:10.5px;border-radius:8px;white-space:nowrap;
+      flex:1;min-width:0;display:flex;align-items:center;justify-content:center;
+      padding:8px 2px;border-radius:8px;
       background:transparent;border:none;
     }
-    .nav-btn.active{ background:var(--accent-dim);color:var(--accent);border:none; }
-    .nav-btn.external span{ display:none; } /* 外部連結的↗符號手機上省略,維持圖示置中 */
+    .nav-btn.active{ background:var(--accent-dim); }
+    .nav-btn .nav-icon{ font-size:20px; }
+    .nav-btn .nav-label, .nav-btn.external > span:last-child{ display:none; } /* 只留圖示,文字/外部連結符號在手機上收起 */
   }
 
   /* ---- 固定在畫面上方的回頂端/回底端按鈕(桌機+手機都有,全螢幕看影片時自動隱藏) ---- */
@@ -577,11 +583,11 @@
     </div>
 
     <nav class="sidebar-nav">
-      <button class="nav-btn active" data-nav="search">🔍 搜尋結果</button>
-      <button class="nav-btn" id="subsNavBtn" data-nav="subscriptions" style="display:none">📺 我的訂閱</button>
-      <button class="nav-btn" id="playlistsNavBtn" data-nav="playlists" style="display:none">🎞️ 播放清單</button>
-      <button class="nav-btn" data-nav="customfeed">🧭 自訂動態</button>
-      <button class="nav-btn external" data-nav="home">🏠 YouTube 首頁推薦 <span>↗</span></button>
+      <button class="nav-btn active" data-nav="search"><span class="nav-icon">🔍</span><span class="nav-label">搜尋結果</span></button>
+      <button class="nav-btn" id="subsNavBtn" data-nav="subscriptions" style="display:none"><span class="nav-icon">📺</span><span class="nav-label">我的訂閱</span></button>
+      <button class="nav-btn" id="playlistsNavBtn" data-nav="playlists" style="display:none"><span class="nav-icon">🎞️</span><span class="nav-label">播放清單</span></button>
+      <button class="nav-btn" data-nav="customfeed"><span class="nav-icon">🧭</span><span class="nav-label">自訂動態</span></button>
+      <button class="nav-btn external" data-nav="home"><span class="nav-icon">🏠</span><span class="nav-label">YouTube 首頁推薦</span><span>↗</span></button>
     </nav>
   </aside>
 
@@ -626,6 +632,7 @@
       <div id="playlistDetailBox" style="display:none;margin-bottom:18px;">
         <div class="pl-sidebar-head">
           <select id="playlistSwitcher"></select>
+          <button class="btn" id="plSelectAllBtn">☑ 全選</button>
         </div>
         <div class="selection-bar" id="plItemToolbar" style="display:none">
           <span id="plItemSelCount">已選 0 部影片</span>
@@ -843,7 +850,26 @@ function switchSidebarView(view) {
   window.scrollTo(0, 0);
   const centerEl = document.getElementById('centerContent');
   if (centerEl) centerEl.scrollTop = 0;
+  if (window.innerWidth < 900) forceMobileMiniOnNav(); // 手機上切分頁時,逐字稿/留言/佇列這些附屬面板要跟著收起,只留小視窗繼續播放
   updateMiniPlayer();
+}
+
+// ---------- 手機版「現正播放」收合邏輯:切到別的分頁時,播放器縮小到角落、逐字稿/留言/佇列整組收起 ----------
+function forceMobileMiniOnNav() {
+  const wrap = document.getElementById('playerWrap');
+  if (!wrap || wrap.style.display === 'none') return;
+  mobileNavMini = true;
+  updateMiniPlayer();
+  [els.transcriptPanel, els.commentsPanel, els.queuePanel].forEach(p => { if (p) p.dataset.mobileHidden = p.style.display !== 'none' ? '1' : ''; if (p) p.style.display = 'none'; });
+}
+
+function restoreMobileDetailPanels() {
+  [els.transcriptPanel, els.commentsPanel, els.queuePanel].forEach(p => {
+    if (p && p.dataset.mobileHidden === '1') { p.style.display = 'block'; p.dataset.mobileHidden = ''; }
+  });
+  mobileNavMini = false;
+  updateMiniPlayer();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -1904,6 +1930,7 @@ async function selectVideo(v, opts = {}) {
   const playerWrap = document.getElementById('playerWrap');
   playerWrap.style.display = 'block';
   playerWrap.classList.remove('mini'); // 點選新影片時一律回到完整播放器
+  mobileNavMini = false;
   window.scrollTo({ top: 0, behavior: 'smooth' }); // 不管在哪一頁點影片,都捲回頂部看播放器
 
   renderVideoInfoBar(v);
@@ -2122,10 +2149,15 @@ function isVideoPlaying() {
 }
 
 let _sentinelVisible = true;
+let mobileNavMini = false; // 手機上「切分頁強制縮小」的狀態,由forceMobileMiniOnNav/restoreMobileDetailPanels控制,updateMiniPlayer在手機寬度下要讓這個狀態說了算,避免兩套邏輯互相搶著開關.mini
 
 function updateMiniPlayer() {
   const wrap = document.getElementById('playerWrap');
   if (!wrap || wrap.style.display === 'none') return;
+  if (window.innerWidth < 900) {
+    wrap.classList.toggle('mini', isVideoPlaying() && mobileNavMini);
+    return;
+  }
   const shouldMini = isVideoPlaying() && !_sentinelVisible;
   wrap.classList.toggle('mini', shouldMini);
 }
@@ -2149,7 +2181,10 @@ setInterval(updateMiniPlayer, 1000); // 暫停/繼續播放沒有捲動或交叉
 
 document.getElementById('miniExpandBtn').addEventListener('click', (e) => {
   e.stopPropagation();
-  window.scrollTo({ top: 0, behavior: 'smooth' }); // 捲回頂部後,IntersectionObserver會自動判定sentinel重新可見,還原成完整播放器
+  restoreMobileDetailPanels();
+});
+document.getElementById('playerWrap').addEventListener('click', () => {
+  if (document.getElementById('playerWrap').classList.contains('mini')) restoreMobileDetailPanels();
 });
 
 function updateRateIndicator() {
@@ -2321,6 +2356,8 @@ async function openPlaylist(playlistId) {
   currentPlaylistId = playlistId;
   renderPlaylistsBrowseList();
   plItemSelection.clear();
+  const selAllBtn = document.getElementById('plSelectAllBtn');
+  if (selAllBtn) selAllBtn.textContent = '☑ 全選';
 
   const switcher = document.getElementById('playlistSwitcher');
   switcher.innerHTML = userPlaylists
@@ -2357,6 +2394,28 @@ function updatePlItemToolbar() {
   const countEl = document.getElementById('plItemSelCount');
   if (countEl) countEl.textContent = `已選 ${plItemSelection.size} 部影片`;
 }
+
+document.getElementById('plSelectAllBtn').addEventListener('click', () => {
+  const rows = document.querySelectorAll('#playlistItemsList .pl-item');
+  const allSelected = rows.length > 0 && [...rows].every(r => plItemSelection.has(r.dataset.plitemid));
+  rows.forEach(row => {
+    const checkbox = row.querySelector('.vid-check');
+    if (allSelected) {
+      plItemSelection.delete(row.dataset.plitemid);
+      checkbox.checked = false;
+    } else {
+      plItemSelection.set(row.dataset.plitemid, {
+        playlist_item_id: row.dataset.plitemid,
+        video_id: row.dataset.vid,
+        title: row.dataset.title,
+        channel: row.dataset.channel,
+      });
+      checkbox.checked = true;
+    }
+  });
+  document.getElementById('plSelectAllBtn').textContent = allSelected ? '☑ 全選' : '☐ 取消全選';
+  updatePlItemToolbar();
+});
 
 function renderPlaylistItemsList(items) {
   const list = document.getElementById('playlistItemsList');
