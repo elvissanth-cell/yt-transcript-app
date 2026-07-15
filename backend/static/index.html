@@ -485,9 +485,32 @@
     }
     .player-sidebar{ order:1; }
     .sidebar{ order:2; }
-    .center-content{ order:3; padding:16px; }
+    .center-content{ order:3; padding:16px; padding-bottom:76px; } /* 底部留空間,避免內容被固定分頁列擋住 */
     /* 手機上頻道頁一樣維持「播放器在最上面、頻道內容在下面」上下堆疊,不要硬擠兩欄 */
     body.channel-mode .app-shell{ grid-template-columns:1fr; }
+
+    /* ---- 播放器+資訊列黏在畫面最上方,切換分頁或往下捲動逐字稿/留言都不會被捲走 ---- */
+    #playerPinned{
+      position:sticky;top:0;z-index:60;background:var(--bg);
+      padding-bottom:6px;border-bottom:1px solid var(--line);
+    }
+
+    /* ---- 導覽從「頁面頂端、佔位又會被捲走的文字按鈕」改成「螢幕底部固定的分頁列」 ---- */
+    /* 只動 .sidebar-nav(那排搜尋結果/我的訂閱/播放清單...按鈕),搜尋框/篩選/我的最愛維持原位不動 */
+    .sidebar-nav{
+      position:fixed;left:0;right:0;bottom:0;z-index:100;
+      display:flex;flex-direction:row;gap:0;
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+      background:var(--surface);border-top:1px solid var(--line);
+      overflow-x:auto;
+    }
+    .nav-btn{
+      flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;
+      padding:6px 2px;font-size:10.5px;border-radius:8px;white-space:nowrap;
+      background:transparent;border:none;
+    }
+    .nav-btn.active{ background:var(--accent-dim);color:var(--accent);border:none; }
+    .nav-btn.external span{ display:none; } /* 外部連結的↗符號手機上省略,維持圖示置中 */
   }
 
   /* ---- 固定在畫面上方的回頂端/回底端按鈕(桌機+手機都有,全螢幕看影片時自動隱藏) ---- */
@@ -650,18 +673,19 @@
   </main>
 
   <aside class="player-sidebar" id="playerSidebar">
-    <div id="nowPlaying" class="now-playing" style="display:none"></div>
-    <div id="playerSentinel"></div>
-    <div id="playerWrap" class="player-wrap" style="display:none">
-      <button class="mini-expand" id="miniExpandBtn" title="回到完整播放器">⤢</button>
-      <div id="ytPlayer"></div>
+    <div id="playerPinned">
+      <div id="nowPlaying" class="now-playing" style="display:none"></div>
+      <div id="playerSentinel"></div>
+      <div id="playerWrap" class="player-wrap" style="display:none">
+        <button class="mini-expand" id="miniExpandBtn" title="回到完整播放器">⤢</button>
+        <div id="ytPlayer"></div>
+      </div>
+      <div class="kb-hint" id="kbHint">
+        💡 播放中用 <b>Shift + .</b> 加速、<b>Shift + ,</b> 減速（不用點進畫面，網頁上按就有效）
+        <span id="rateIndicator" style="display:none;margin-left:8px;color:var(--accent);font-weight:600;"></span>
+      </div>
+      <div class="video-info-bar" id="videoInfoBar" style="display:none"></div>
     </div>
-    <div class="kb-hint" id="kbHint">
-      💡 播放中用 <b>Shift + .</b> 加速、<b>Shift + ,</b> 減速（不用點進畫面，網頁上按就有效）
-      <span id="rateIndicator" style="display:none;margin-left:8px;color:var(--accent);font-weight:600;"></span>
-    </div>
-
-    <div class="video-info-bar" id="videoInfoBar" style="display:none"></div>
 
     <div class="panel" id="transcriptPanel" style="display:none">
       <div class="panel-head">

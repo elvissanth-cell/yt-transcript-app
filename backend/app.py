@@ -5,6 +5,7 @@ YouTube 影片搜尋/逐字稿/留言擷取 後端服務
 import os
 import json
 import re
+import time
 import traceback
 
 from flask import Flask, request, jsonify, send_from_directory, redirect, session
@@ -927,7 +928,18 @@ def get_transcript():
         )
 
         api = YouTubeTranscriptApi()
-        transcript_list = api.list(video_id)
+        transcript_list = None
+        last_err = None
+        for attempt in range(3):  # YouTube的IP封鎖有時只是暫時性的頻率限制,重試幾次有機會成功
+            try:
+                transcript_list = api.list(video_id)
+                break
+            except Exception as e:
+                last_err = e
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+        if transcript_list is None:
+            raise last_err
 
         transcript = None
         try:
@@ -988,18 +1000,30 @@ def get_comments():
         sort_mode = SORT_BY_POPULAR if sort_by == 0 else SORT_BY_RECENT
 
         comments = []
-        for i, c in enumerate(downloader.get_comments_from_url(url, sort_by=sort_mode)):
-            if i >= limit:
+        last_err = None
+        for attempt in range(3):  # 同樣是YouTube IP限流的問題,重試幾次有機會繞過暫時性阻擋
+            try:
+                for i, c in enumerate(downloader.get_comments_from_url(url, sort_by=sort_mode)):
+                    if i >= limit:
+                        break
+                    comments.append(
+                        {
+                            "author": c.get("author"),
+                            "text": c.get("text"),
+                            "votes": c.get("votes"),
+                            "time": c.get("time"),
+                            "reply": c.get("reply", False),
+                        }
+                    )
+                last_err = None
                 break
-            comments.append(
-                {
-                    "author": c.get("author"),
-                    "text": c.get("text"),
-                    "votes": c.get("votes"),
-                    "time": c.get("time"),
-                    "reply": c.get("reply", False),
-                }
-            )
+            except Exception as e:
+                last_err = e
+                comments = []
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+        if last_err is not None:
+            raise last_err
 
         return jsonify({"video_id": video_id, "count": len(comments), "comments": comments})
     except Exception as e:
