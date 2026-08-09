@@ -33,6 +33,7 @@ CORS(app, supports_credentials=True)  # 保留CORS支援：若之後想拆成前
 # ========== 新增：手動快取機制（解決每次載入頻道都慢的問題） ==========
 cache_store = {}          # 存放快取資料
 CACHE_TTL = 600           # 快取有效時間（秒），這裡設為 10 分鐘
+FEED_CACHE_TTL = 90       # 訂閱動態快取時間（秒），較短是因為訂閱動態需要保持新鮮
 # ====================================================================
 
 
@@ -870,6 +871,14 @@ def api_subscriptions_feed():
     if not channel_ids:
         return jsonify({"error": "缺少 channels 參數(勾選的頻道ID清單)"}), 400
 
+    # ========== 短效快取:同樣的頻道組合+篩選條件短時間內重複查詢直接回傳,體感速度接近YouTube網站 ==========
+    feed_cache_key = "feed|" + ",".join(sorted(channel_ids)) + f"|{per_channel}|{duration_filter}|{upload_date_filter}"
+    if feed_cache_key in cache_store:
+        cached_data, cached_at = cache_store[feed_cache_key]
+        if time.time() - cached_at < FEED_CACHE_TTL:
+            return jsonify(cached_data)
+    # ================================================================================================
+
     try:
         from googleapiclient.discovery import build
 
@@ -903,25 +912,31 @@ def api_subscriptions_feed():
         all_videos = []
         valid_ids = [cid for cid in channel_ids if cid.startswith("UC")]
         # 頻道數多時逐一呼叫API是主要延遲來源,改用多執行緒平行打API(每個頻道請求互相獨立)
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        # worker數調高到25,因為這些都是網路等待為主的呼叫,提高並行數可以再縮短總時間
+        with ThreadPoolExecutor(max_workers=25) as executor:
             for videos in executor.map(_fetch_channel_uploads, valid_ids):
                 all_videos.extend(videos)
 
-        # 補上觀看數與時長(videos.list一次最多查50個影片id,分批處理)
+        # 補上觀看數與時長(videos.list一次最多查50個影片id,分批呼叫,批次之間也平行處理)
         video_ids = [v["video_id"] for v in all_videos]
         stats_map = {}
         duration_map = {}
-        for i in range(0, len(video_ids), 50):
-            batch = video_ids[i : i + 50]
+
+        def _fetch_stats_batch(batch):
             try:
                 resp = youtube.videos().list(part="statistics,contentDetails", id=",".join(batch)).execute()
-                for item in resp.get("items", []):
+                return resp.get("items", [])
+            except Exception:
+                return []
+
+        id_batches = [video_ids[i : i + 50] for i in range(0, len(video_ids), 50)]
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for items in executor.map(_fetch_stats_batch, id_batches):
+                for item in items:
                     stats_map[item["id"]] = item.get("statistics", {}).get("viewCount")
                     duration_map[item["id"]] = _parse_iso8601_duration(
                         item.get("contentDetails", {}).get("duration")
                     )
-            except Exception:
-                pass
         for v in all_videos:
             vc = stats_map.get(v["video_id"])
             v["view_count"] = int(vc) if vc else None
@@ -945,7 +960,9 @@ def api_subscriptions_feed():
             ]
 
         all_videos.sort(key=lambda v: v.get("published_at") or "", reverse=True)
-        return jsonify({"videos": all_videos})
+        result_data = {"videos": all_videos}
+        cache_store[feed_cache_key] = (result_data, time.time())
+        return jsonify(result_data)
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": f"訂閱動態擷取失敗: {str(e)}"}), 500
