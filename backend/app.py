@@ -7,6 +7,8 @@ import json
 import re
 import time
 import traceback
+from functools import lru_cache  # 新增：雖然我們用手動快取，但保留這行以備用
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Flask, request, jsonify, send_from_directory, redirect, session
 
@@ -26,6 +28,12 @@ from flask_cors import CORS
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me")
 CORS(app, supports_credentials=True)  # 保留CORS支援：若之後想拆成前後端分離部署，仍然可以跨網域呼叫
+
+
+# ========== 新增：手動快取機制（解決每次載入頻道都慢的問題） ==========
+cache_store = {}          # 存放快取資料
+CACHE_TTL = 600           # 快取有效時間（秒），這裡設為 10 分鐘
+# ====================================================================
 
 
 @app.route("/")
@@ -142,6 +150,15 @@ def fetch_channel_data(channel_url: str, limit: int = 20, sort: str = "newest", 
     """
     import yt_dlp
 
+    # ========== 新增快取邏輯開始 ==========
+    cache_key = f"{channel_url}|{limit}|{sort}|{q}"
+    if cache_key in cache_store:
+        data, timestamp = cache_store[cache_key]
+        if time.time() - timestamp < CACHE_TTL:
+            print(f"✅ 命中快取，直接回傳 (跳過 yt-dlp)  key={cache_key}")
+            return data
+    # ========== 快取邏輯結束 ==========
+
     # 做「觀看數排序」或「關鍵字搜尋」時,多抓一些候選(最多50)以提高命中機會
     fetch_limit = max(limit, 50) if (sort == "views" or q) else limit
 
@@ -176,7 +193,7 @@ def fetch_channel_data(channel_url: str, limit: int = 20, sort: str = "newest", 
 
     videos = [_video_entry_to_dict(e, channel_name, channel_url) for e in entries[:limit]]
 
-    return {
+    result = {
         "name": channel_name,
         "url": channel_url,
         "subscriber_count": info.get("channel_follower_count"),
@@ -186,6 +203,12 @@ def fetch_channel_data(channel_url: str, limit: int = 20, sort: str = "newest", 
         "sort": sort,
         "search_scope_note": "頻道內搜尋僅涵蓋最近抓取的影片批次,非頻道全部歷史影片" if q else None,
     }
+
+    # ========== 存入快取 ==========
+    cache_store[cache_key] = (result, time.time())
+    print(f"🆕 快取已更新 (有效期限 {CACHE_TTL} 秒)  key={cache_key}")
+
+    return result
 
 
 def fetch_channel_playlists(channel_url: str, limit: int = 20) -> list:
@@ -672,19 +695,24 @@ def api_channels_last_video():
         from googleapiclient.discovery import build
 
         youtube = build("youtube", "v3", credentials=creds)
-        result = {}
-        for cid in channel_ids:
-            if not cid.startswith("UC"):
-                continue
+
+        def _fetch_last_video(cid):
             uploads_playlist = "UU" + cid[2:]
             try:
                 resp = youtube.playlistItems().list(
                     part="snippet", playlistId=uploads_playlist, maxResults=1
                 ).execute()
                 items = resp.get("items", [])
-                result[cid] = items[0]["snippet"]["publishedAt"] if items else None
+                return cid, (items[0]["snippet"]["publishedAt"] if items else None)
             except Exception:
-                result[cid] = None
+                return cid, None
+
+        result = {}
+        valid_ids = [cid for cid in channel_ids if cid.startswith("UC")]
+        # 頻道數多時逐一呼叫API會很慢,改用多執行緒平行打API(每個請求互相獨立)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for cid, published_at in executor.map(_fetch_last_video, valid_ids):
+                result[cid] = published_at
         return jsonify({"last_updated": result})
     except Exception as e:
         traceback.print_exc()
@@ -846,21 +874,20 @@ def api_subscriptions_feed():
         from googleapiclient.discovery import build
 
         youtube = build("youtube", "v3", credentials=creds)
-        all_videos = []
-        for cid in channel_ids:
-            if not cid.startswith("UC"):
-                continue
+
+        def _fetch_channel_uploads(cid):
             uploads_playlist = "UU" + cid[2:]  # YouTube頻道的「上傳播放清單」ID命名慣例
             try:
                 resp = youtube.playlistItems().list(
                     part="snippet", playlistId=uploads_playlist, maxResults=per_channel
                 ).execute()
             except Exception:
-                continue
+                return []
+            videos = []
             for item in resp.get("items", []):
                 sn = item["snippet"]
                 vid = sn["resourceId"]["videoId"]
-                all_videos.append(
+                videos.append(
                     {
                         "video_id": vid,
                         "title": sn.get("title"),
@@ -871,6 +898,14 @@ def api_subscriptions_feed():
                         "url": f"https://www.youtube.com/watch?v={vid}",
                     }
                 )
+            return videos
+
+        all_videos = []
+        valid_ids = [cid for cid in channel_ids if cid.startswith("UC")]
+        # 頻道數多時逐一呼叫API是主要延遲來源,改用多執行緒平行打API(每個頻道請求互相獨立)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for videos in executor.map(_fetch_channel_uploads, valid_ids):
+                all_videos.extend(videos)
 
         # 補上觀看數與時長(videos.list一次最多查50個影片id,分批處理)
         video_ids = [v["video_id"] for v in all_videos]
