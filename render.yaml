@@ -4,8 +4,8 @@ services:
     runtime: python
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt && echo "===GUNICORN_PATH===" && (which gunicorn || echo NOT_ON_PATH) && find / -xdev -iname "gunicorn" -type f 2>/dev/null && echo "===END==="
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 4 --timeout 120
+    buildCommand: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+    startCommand: .venv/bin/gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 4 --timeout 120
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
